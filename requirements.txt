@@ -1,4 +1,3 @@
-tkinter
-os
-shutil
-filedialog
+# Este projeto usa apenas módulos da biblioteca padrão do Python
+# (os, datetime, tkinter) - nenhuma dependência externa é necessária
+# para executar o organizador.
