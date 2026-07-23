@@ -87,6 +87,17 @@ pyinstaller --onefile --windowed --name organizador organizer.py
 
 O executável gerado fica em `dist/organizador` (ou `dist/organizador.exe` no Windows). As pastas `build/`, `dist/` e o arquivo `*.spec` gerados pelo PyInstaller já estão no `.gitignore` e não devem ser commitados.
 
+### Releases automatizados
+
+Em vez de gerar o executável manualmente, o workflow `.github/workflows/release.yml` builda e publica automaticamente os três executáveis (Linux, Windows e macOS) sempre que uma tag no formato `vX.Y.Z` é enviada ao repositório:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Isso dispara uma matrix de build (rodando os testes antes de empacotar, em cada plataforma) e cria uma *release* em modo rascunho no GitHub com os três executáveis anexados (`organizador-linux`, `organizador-windows.exe`, `organizador-macos`), pronta para revisão e publicação manual.
+
 ## Como Rodar os Testes
 
 Os testes cobrem `organizer_core.py`, `organizer_config.py` e `organizer_ai.py` (este último com o Ollama mockado) e não abrem nenhuma janela gráfica, então funcionam em ambientes headless como CI:
