@@ -5,6 +5,8 @@ import pytest
 
 tk = pytest.importorskip("tkinter")
 
+import organizer_config  # noqa: E402
+import organizer_history  # noqa: E402
 from organizer import OrganizadorApp  # noqa: E402
 
 
@@ -28,8 +30,21 @@ def tk_root():
 
 @pytest.fixture
 def app(tmp_path, monkeypatch, tk_root):
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    os.makedirs(tmp_path / "home", exist_ok=True)
+    # Isola config/historico apontando as funcoes "caminho padrao" para
+    # dentro de tmp_path, em vez de depender da variavel de ambiente HOME:
+    # no Windows, os.path.expanduser("~") usa USERPROFILE (nao HOME), entao
+    # monkeypatch.setenv("HOME", ...) nao isola nada la e os testes vazam
+    # estado real entre si via ~/.organizador_arquivos.
+    monkeypatch.setattr(
+        organizer_config,
+        "caminho_config_padrao",
+        lambda: str(tmp_path / "config.json"),
+    )
+    monkeypatch.setattr(
+        organizer_history,
+        "caminho_historico_padrao",
+        lambda: str(tmp_path / "historico.json"),
+    )
     window = tk.Toplevel(tk_root)
     aplicativo = OrganizadorApp(window)
     window.update()
