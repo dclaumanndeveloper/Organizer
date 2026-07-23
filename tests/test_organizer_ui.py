@@ -233,3 +233,55 @@ def test_ciclo_de_monitoramento_silencioso_nao_abre_messagebox(app, tmp_path):
         assert not mock_msgbox.showerror.called
 
     app._parar_monitoramento()
+
+
+def test_idioma_padrao_e_portugues(app):
+    assert app.idioma == "pt"
+    assert app.botao_organizar.cget("text") == "Selecionar pasta e organizar"
+
+
+def test_trocar_idioma_atualiza_textos_estaticos(app):
+    app._trocar_idioma("en")
+
+    assert app.rotulo_titulo.cget("text") == "File Organizer"
+    assert app.botao_organizar.cget("text") == "Select folder and organize"
+    assert app.botao_desfazer.cget("text") == "Undo last organization"
+    assert app.check_simular.cget("text").startswith("Simulate")
+    assert app.label_diretorio.cget("text") == "No folder selected yet"
+
+
+def test_trocar_idioma_preserva_pasta_ja_selecionada(app, tmp_path):
+    pasta = tmp_path / "arquivos"
+    pasta.mkdir()
+
+    with patch("organizer.filedialog") as mock_fd, patch("organizer.messagebox"):
+        mock_fd.askdirectory.return_value = str(pasta)
+        app._selecionar_e_organizar()
+
+    app._trocar_idioma("es")
+
+    assert app.label_diretorio.cget("text") == str(pasta)
+
+
+def test_trocar_idioma_preserva_texto_do_botao_durante_monitoramento(app, tmp_path):
+    pasta = tmp_path / "arquivos"
+    pasta.mkdir()
+    _criar_arquivo(pasta, "foto.jpg")
+
+    with patch("organizer.filedialog") as mock_fd, patch("organizer.messagebox"):
+        mock_fd.askdirectory.return_value = str(pasta)
+        app.var_monitorar.set(True)
+        app._selecionar_e_organizar()
+
+    app._trocar_idioma("en")
+
+    assert app.botao_organizar.cget("text") == "Stop monitoring"
+    app._parar_monitoramento()
+
+
+def test_trocar_idioma_persiste_escolha_no_config(app, tmp_path):
+    app._trocar_idioma("es")
+
+    from organizer_config import carregar_config
+
+    assert carregar_config(str(tmp_path / "config.json"))["idioma"] == "es"
