@@ -4,6 +4,14 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      versao_teste:
+        description: >-
+          Nome da tag a usar ao disparar manualmente (ex: v0.0.1-test).
+          Ignorado quando o workflow roda por push de tag.
+        required: false
+        default: "v0.0.0-manual-test"
 
 permissions:
   contents: write
@@ -70,6 +78,7 @@ jobs:
       - name: Criar release no GitHub
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.versao_teste || github.ref_name }}
           draft: true
           generate_release_notes: true
           files: artefatos/**/*
