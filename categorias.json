@@ -1,0 +1,9 @@
+{
+  "imagens": ["jpg", "jpeg", "png", "gif", "bmp", "svg", "webp", "tiff", "ico"],
+  "documentos": ["pdf", "doc", "docx", "odt", "txt", "rtf", "md"],
+  "planilhas": ["xls", "xlsx", "ods", "csv"],
+  "apresentacoes": ["ppt", "pptx", "odp"],
+  "audio": ["mp3", "wav", "flac", "aac", "ogg", "m4a"],
+  "video": ["mp4", "mov", "avi", "mkv", "wmv", "flv"],
+  "compactados": ["zip", "rar", "7z", "tar", "gz"]
+}
