@@ -88,3 +88,61 @@ def test_ano_invalido_mostra_erro(app, tmp_path):
 
     assert mock_msgbox.showerror.called
     assert os.listdir(pasta) == ["foto.jpg"]
+
+
+def test_botao_desfazer_comeca_desabilitado(app):
+    assert str(app.botao_desfazer.cget("state")) == "disabled"
+
+
+def test_desfazer_reverte_ultima_organizacao(app, tmp_path):
+    pasta = tmp_path / "arquivos"
+    pasta.mkdir()
+    _criar_arquivo(pasta, "foto.jpg")
+
+    with patch("organizer.filedialog") as mock_fd, patch("organizer.messagebox"):
+        mock_fd.askdirectory.return_value = str(pasta)
+        app._selecionar_e_organizar()
+
+    assert str(app.botao_desfazer.cget("state")) == "normal"
+    assert os.listdir(pasta) == ["jpg"]
+
+    with patch("organizer.messagebox") as mock_msgbox:
+        app._desfazer_ultima_organizacao()
+
+    assert os.path.exists(pasta / "foto.jpg")
+    assert mock_msgbox.showinfo.called
+    assert str(app.botao_desfazer.cget("state")) == "disabled"
+
+
+def test_detectar_duplicados_move_para_pasta_duplicados(app, tmp_path):
+    pasta = tmp_path / "arquivos"
+    pasta.mkdir()
+    _criar_arquivo(pasta, "a.txt", conteudo="repetido")
+    _criar_arquivo(pasta, "b.txt", conteudo="repetido")
+
+    with patch("organizer.filedialog") as mock_fd, patch("organizer.messagebox"):
+        mock_fd.askdirectory.return_value = str(pasta)
+        app.var_duplicados.set(True)
+        app._selecionar_e_organizar()
+
+    assert os.path.isdir(pasta / "duplicados")
+    assert len(os.listdir(pasta / "duplicados")) == 1
+
+
+def test_regras_personalizadas_tem_prioridade(app, tmp_path, monkeypatch):
+    pasta = tmp_path / "arquivos"
+    pasta.mkdir()
+    _criar_arquivo(pasta, "fatura_junho.pdf")
+
+    caminho_regras = tmp_path / "regras.json"
+    caminho_regras.write_text(
+        '[{"padrao": "(?i)fatura", "categoria": "financeiro"}]'
+    )
+    monkeypatch.setattr("organizer.CAMINHO_REGRAS", str(caminho_regras))
+
+    with patch("organizer.filedialog") as mock_fd, patch("organizer.messagebox"):
+        mock_fd.askdirectory.return_value = str(pasta)
+        app.var_regras.set(True)
+        app._selecionar_e_organizar()
+
+    assert os.listdir(pasta / "financeiro") == ["fatura_junho.pdf"]

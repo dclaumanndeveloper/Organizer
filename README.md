@@ -14,8 +14,10 @@ O código é dividido em módulos para separar a lógica de negócio da interfac
 -   **`organizer_ai.py`**: integração opcional com um servidor [Ollama](https://ollama.com) local, usada para sugerir a categoria de um arquivo a partir do nome (e de um trecho do conteúdo, para arquivos de texto). Não é importado por `organizer_core.py` — é passado a ele como uma função de callback (`classificador_categoria`), então o núcleo da aplicação não sabe nada sobre Ollama.
 -   **`organizer.py`**: monta a interface gráfica (Tkinter), lê as opções escolhidas pelo usuário e chama `organizer_core.organizar_arquivos`. É o ponto de entrada da aplicação.
 -   **`organizer_config.py`**: carrega/salva o último perfil de uso (pasta, ano, checkboxes) em `~/.organizador_arquivos/config.json`, para que a interface abra já preenchida com as últimas opções usadas.
+-   **`organizer_history.py`**: registra cada organização (lista de origem/destino de cada arquivo movido) em `~/.organizador_arquivos/historico.json` e sabe desfazer a última execução, movendo os arquivos de volta. Assim como `organizer_ai.py`, não é acoplado ao núcleo — `organizer_core.organizar_arquivos` apenas devolve a lista de movimentos em `stats["movimentos"]`.
 -   **`categorias.json`**: mapa de categorias (`{"categoria": ["ext1", "ext2", ...]}`) usado quando o agrupamento por categoria está ativado. Editável pelo usuário para customizar as categorias.
--   **`tests/`**: testes automatizados (`pytest`) cobrindo `organizer_core.py`, `organizer_config.py` e `organizer_ai.py` (este último com o Ollama mockado, sem precisar de um servidor real rodando).
+-   **`regras.json`**: lista de regras de categorização por nome de arquivo (regex), usada quando "Usar regras personalizadas" está ativado. Vazia (`[]`) por padrão — editável pelo usuário.
+-   **`tests/`**: testes automatizados (`pytest`) cobrindo `organizer_core.py`, `organizer_config.py`, `organizer_history.py` e `organizer_ai.py` (este último com o Ollama mockado, sem precisar de um servidor real rodando), além da UI (`organizer.py`) em `tests/test_organizer_ui.py`.
 
 ## Bibliotecas Utilizadas
 
@@ -40,8 +42,11 @@ Para rodar os testes automatizados ou empacotar a aplicação como executável �
 7.  **Filtro por Ano (opcional)**: se um ano for informado no campo de entrada, arquivos cuja última modificação seja anterior a esse ano são ignorados (não são movidos, nem excluídos).
 8.  **Proteção contra sobrescrita**: se já existir um arquivo com o mesmo nome na pasta de destino, o arquivo movido é renomeado automaticamente (ex: `notas_1.txt`) em vez de sobrescrever o arquivo existente.
 9.  **Progresso em tempo real**: uma barra de progresso e um log mostram cada arquivo conforme é processado (`[2/5] foto.png - movido para imagens/`), além do resumo final.
-10. **Organização Recursiva** (opcional): ao marcar "Organizar subpastas também", cada subpasta encontrada também é organizada, ganhando suas próprias pastas de destino dentro dela mesma (os arquivos não são movidos para fora de onde estão, só agrupados no lugar). Pastas cujo nome já é uma categoria/extensão conhecida (ex: `imagens`, `sem_extensao`) não são percorridas novamente, para evitar reprocessar pastas de destino criadas em execuções anteriores.
-11. **Perfil Salvo**: a última pasta selecionada, o ano informado e todas as opções marcadas (simular, categorias, IA, recursivo) são lembrados entre uma execução e outra, em `~/.organizador_arquivos/config.json`.
+10. **Organização Recursiva** (opcional): ao marcar "Organizar subpastas também", cada subpasta encontrada também é organizada, ganhando suas próprias pastas de destino dentro dela mesma (os arquivos não são movidos para fora de onde estão, só agrupados no lugar). Pastas cujo nome já é uma categoria/extensão conhecida (ex: `imagens`, `sem_extensao`, `duplicados`) não são percorridas novamente, para evitar reprocessar pastas de destino criadas em execuções anteriores.
+11. **Perfil Salvo**: a última pasta selecionada, o ano informado e todas as opções marcadas são lembradas entre uma execução e outra, em `~/.organizador_arquivos/config.json`.
+12. **Desfazer Última Organização**: um botão "Desfazer última organização" reverte todos os arquivos movidos na última execução para o local original. Fica desabilitado quando não há nada para desfazer, e continua funcionando mesmo depois de fechar e reabrir o programa (o histórico fica salvo em `~/.organizador_arquivos/historico.json`). Se um arquivo revertido já não existir mais no destino, ou já existir um arquivo com esse nome na origem, o desfazer pula esse arquivo e avisa, sem apagar nada.
+13. **Detecção de Duplicados** (opcional): ao marcar "Detectar arquivos duplicados", cada arquivo tem seu hash (SHA-256) calculado; se o conteúdo já foi visto nesta mesma execução, o arquivo vai para uma pasta `duplicados` em vez de sua categoria normal. Arquivos duplicados nunca são apagados, só isolados para revisão manual.
+14. **Regras Personalizadas por Nome** (opcional): ao marcar "Usar regras personalizadas", cada arquivo é testado contra os padrões (regex) definidos em `regras.json`; o primeiro padrão que der match define a categoria do arquivo, com prioridade sobre a categoria por extensão e sobre a sugestão da IA.
 
 ## Como Executar o Script
 
@@ -75,6 +80,19 @@ Edite o arquivo `categorias.json` para adicionar, remover ou renomear categorias
 ```
 
 Essas categorias são usadas tanto pelo agrupamento manual quanto como opções que a IA pode escolher.
+
+## Regras Personalizadas por Nome
+
+Edite o arquivo `regras.json` para definir categorias com base no nome do arquivo, não só na extensão:
+
+```json
+[
+  {"padrao": "(?i)fatura|boleto|nota_fiscal", "categoria": "financeiro"},
+  {"padrao": "(?i)contrato", "categoria": "juridico"}
+]
+```
+
+Cada `padrao` é uma expressão regular (case-insensitive com `(?i)`) testada contra o nome do arquivo; a primeira que der match define a categoria. Regras têm prioridade sobre a IA e sobre `categorias.json`.
 
 ## Empacotando como Executável (PyInstaller)
 
