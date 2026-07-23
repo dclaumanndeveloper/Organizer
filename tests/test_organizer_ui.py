@@ -15,11 +15,22 @@ def _criar_arquivo(diretorio, nome, conteudo="conteudo"):
     return caminho
 
 
+@pytest.fixture(scope="session")
+def tk_root():
+    # Um unico Tk() por sessao: criar/destruir varias raizes Tk no mesmo
+    # processo quebra o Tcl em alguns SOs (ex: Windows), entao cada teste
+    # usa uma Toplevel nova sobre esta mesma raiz em vez de um Tk() novo.
+    root = tk.Tk()
+    root.withdraw()
+    yield root
+    root.destroy()
+
+
 @pytest.fixture
-def app(tmp_path, monkeypatch):
+def app(tmp_path, monkeypatch, tk_root):
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     os.makedirs(tmp_path / "home", exist_ok=True)
-    window = tk.Tk()
+    window = tk.Toplevel(tk_root)
     aplicativo = OrganizadorApp(window)
     window.update()
     yield aplicativo
