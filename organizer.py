@@ -3,8 +3,9 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 import organizer_ai
+import organizer_history
 from organizer_config import carregar_config, salvar_config
-from organizer_core import carregar_mapa_categorias, organizar_arquivos
+from organizer_core import carregar_mapa_categorias, carregar_regras, organizar_arquivos
 
 BG_COLOR = "#FAFBFF"
 CARD_COLOR = "#FFFFFF"
@@ -16,6 +17,14 @@ PRIMARY_HOVER = "#3B4BC0"
 CAMINHO_CATEGORIAS = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "categorias.json"
 )
+CAMINHO_REGRAS = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "regras.json"
+)
+
+TEXTO_BOTAO_PADRAO = "Selecionar pasta e organizar"
+TEXTO_BOTAO_ORGANIZANDO = "Organizando..."
+TEXTO_BOTAO_PARAR_MONITORAMENTO = "Parar monitoramento"
+INTERVALO_MONITORAMENTO_MS = 30_000
 
 
 class OrganizadorApp:
@@ -31,6 +40,12 @@ class OrganizadorApp:
         self.var_categorias = tk.BooleanVar(value=config.get("categorias", False))
         self.var_ia = tk.BooleanVar(value=config.get("ia", False))
         self.var_recursivo = tk.BooleanVar(value=config.get("recursivo", False))
+        self.var_duplicados = tk.BooleanVar(value=config.get("duplicados", False))
+        self.var_regras = tk.BooleanVar(value=config.get("regras", False))
+        self.var_monitorar = tk.BooleanVar(value=config.get("monitorar", False))
+
+        self.monitorando = False
+        self._id_agendamento_monitoramento = None
 
         self._configurar_janela()
         self._configurar_estilos()
@@ -173,14 +188,43 @@ class OrganizadorApp:
             variable=self.var_recursivo,
             style="Check.TCheckbutton",
         ).pack(anchor="w")
+        ttk.Checkbutton(
+            opcoes_frame,
+            text="Detectar arquivos duplicados (mesmo conteúdo)",
+            variable=self.var_duplicados,
+            style="Check.TCheckbutton",
+        ).pack(anchor="w")
+        ttk.Checkbutton(
+            opcoes_frame,
+            text="Usar regras personalizadas por nome (regras.json)",
+            variable=self.var_regras,
+            style="Check.TCheckbutton",
+        ).pack(anchor="w")
+        ttk.Checkbutton(
+            opcoes_frame,
+            text=f"Monitorar a pasta continuamente (a cada "
+            f"{INTERVALO_MONITORAMENTO_MS // 1000}s)",
+            variable=self.var_monitorar,
+            style="Check.TCheckbutton",
+            command=self._ao_alternar_checkbox_monitorar,
+        ).pack(anchor="w")
 
+        botoes_frame = ttk.Frame(container, style="App.TFrame")
+        botoes_frame.pack(fill="x", pady=(0, 12))
         self.botao_organizar = ttk.Button(
-            container,
-            text="Selecionar pasta e organizar",
+            botoes_frame,
+            text=TEXTO_BOTAO_PADRAO,
             style="Primary.TButton",
             command=self._selecionar_e_organizar,
         )
-        self.botao_organizar.pack(anchor="w", pady=(0, 12))
+        self.botao_organizar.pack(side="left")
+        self.botao_desfazer = ttk.Button(
+            botoes_frame,
+            text="Desfazer última organização",
+            command=self._desfazer_ultima_organizacao,
+        )
+        self.botao_desfazer.pack(side="left", padx=(8, 0))
+        self._atualizar_estado_botao_desfazer()
 
         self.progress = ttk.Progressbar(container, orient="horizontal", mode="determinate")
         self.progress.pack(fill="x", pady=(0, 20))
@@ -225,7 +269,7 @@ class OrganizadorApp:
         self.texto_resultado.see("end")
         self.texto_resultado.configure(state="disabled")
 
-    def _preparar_categorias_e_classificador(self):
+    def _preparar_categorias_e_classificador(self, silencioso):
         mapa_categorias = None
         if self.var_categorias.get() or self.var_ia.get():
             mapa_categorias = carregar_mapa_categorias(CAMINHO_CATEGORIAS)
@@ -233,12 +277,15 @@ class OrganizadorApp:
         classificador = None
         if self.var_ia.get():
             if not organizer_ai.ollama_disponivel():
-                messagebox.showwarning(
-                    "Organizador",
+                aviso = (
                     "Ollama não está disponível em localhost:11434. "
                     "Continuando sem classificação por IA (usando "
-                    "extensão/categoria padrão).",
+                    "extensão/categoria padrão)."
                 )
+                if silencioso:
+                    self._adicionar_linha_resultado(aviso)
+                else:
+                    messagebox.showwarning("Organizador", aviso)
             else:
                 categorias_disponiveis = sorted(set(mapa_categorias.values()))
 
@@ -252,7 +299,45 @@ class OrganizadorApp:
 
         return mapa_categorias, classificador
 
+    def _atualizar_estado_botao_desfazer(self):
+        tem_historico = bool(organizer_history.carregar_historico())
+        self.botao_desfazer.configure(
+            state="normal" if tem_historico else "disabled"
+        )
+
+    def _desfazer_ultima_organizacao(self):
+        try:
+            stats = organizer_history.desfazer_ultima_operacao()
+        except ValueError as exc:
+            messagebox.showinfo("Organizador", str(exc))
+            return
+
+        self._limpar_resultado()
+        self._adicionar_linha_resultado(
+            f"{stats['revertidos']} arquivo(s) revertido(s) para o local original."
+        )
+        if stats["erros"]:
+            self._adicionar_linha_resultado(f"{len(stats['erros'])} erro(s):")
+            for erro in stats["erros"]:
+                self._adicionar_linha_resultado(f"  - {erro}")
+            messagebox.showwarning(
+                "Organizador",
+                "Desfeito com alguns erros. Veja os detalhes na janela.",
+            )
+        else:
+            messagebox.showinfo("Organizador", "Última organização desfeita com sucesso!")
+
+        self._atualizar_estado_botao_desfazer()
+
+    def _ao_alternar_checkbox_monitorar(self):
+        if not self.var_monitorar.get() and self.monitorando:
+            self._parar_monitoramento()
+
     def _selecionar_e_organizar(self):
+        if self.monitorando:
+            self._parar_monitoramento()
+            return
+
         diretorio = filedialog.askdirectory(
             initialdir=self.ultimo_diretorio or os.path.expanduser("~")
         )
@@ -262,22 +347,63 @@ class OrganizadorApp:
         self.ultimo_diretorio = diretorio
         self.label_diretorio.configure(text=diretorio)
 
+        if self.var_monitorar.get():
+            self._iniciar_monitoramento(diretorio)
+        else:
+            self._organizar_diretorio(diretorio, silencioso=False)
+
+    def _iniciar_monitoramento(self, diretorio):
+        self.monitorando = True
+        self.botao_organizar.configure(text=TEXTO_BOTAO_PARAR_MONITORAMENTO)
+        self._limpar_resultado()
+        self._adicionar_linha_resultado(
+            f"Monitoramento iniciado em {diretorio} (a cada "
+            f"{INTERVALO_MONITORAMENTO_MS // 1000}s). Clique no botão "
+            "novamente para parar."
+        )
+        self._executar_ciclo_monitoramento(diretorio)
+
+    def _executar_ciclo_monitoramento(self, diretorio):
+        if not self.monitorando:
+            return
+        self._organizar_diretorio(diretorio, silencioso=True)
+        self._id_agendamento_monitoramento = self.window.after(
+            INTERVALO_MONITORAMENTO_MS,
+            lambda: self._executar_ciclo_monitoramento(diretorio),
+        )
+
+    def _parar_monitoramento(self):
+        self.monitorando = False
+        if self._id_agendamento_monitoramento is not None:
+            self.window.after_cancel(self._id_agendamento_monitoramento)
+            self._id_agendamento_monitoramento = None
+        self.botao_organizar.configure(text=TEXTO_BOTAO_PADRAO)
+        self._adicionar_linha_resultado("Monitoramento interrompido.")
+
+    def _organizar_diretorio(self, diretorio, silencioso):
         ano_texto = self.entry_ano.get().strip()
         ano_minimo = None
         if ano_texto:
             try:
                 ano_minimo = int(ano_texto)
             except ValueError:
-                messagebox.showerror(
-                    "Organizador",
+                mensagem = (
                     "Ano inválido. Informe um número (ex: 2020) ou deixe o "
-                    "campo em branco.",
+                    "campo em branco."
                 )
+                if silencioso:
+                    self._adicionar_linha_resultado(f"Ciclo pulado: {mensagem}")
+                else:
+                    messagebox.showerror("Organizador", mensagem)
                 return
 
-        mapa_categorias, classificador = self._preparar_categorias_e_classificador()
+        mapa_categorias, classificador = self._preparar_categorias_e_classificador(
+            silencioso
+        )
         simular = self.var_simular.get()
         recursivo = self.var_recursivo.get()
+        detectar_duplicados = self.var_duplicados.get()
+        regras = carregar_regras(CAMINHO_REGRAS) if self.var_regras.get() else None
 
         salvar_config(
             {
@@ -287,12 +413,16 @@ class OrganizadorApp:
                 "categorias": self.var_categorias.get(),
                 "ia": self.var_ia.get(),
                 "recursivo": recursivo,
+                "duplicados": detectar_duplicados,
+                "regras": self.var_regras.get(),
+                "monitorar": self.var_monitorar.get(),
             }
         )
 
-        self.botao_organizar.configure(state="disabled", text="Organizando...")
+        if not silencioso:
+            self.botao_organizar.configure(state="disabled", text=TEXTO_BOTAO_ORGANIZANDO)
+            self._limpar_resultado()
         self.progress.configure(value=0, maximum=1)
-        self._limpar_resultado()
         self.window.update_idletasks()
 
         verbo = "seria movido" if simular else "movido"
@@ -301,6 +431,7 @@ class OrganizadorApp:
             self.progress.configure(maximum=total, value=indice)
             descricao = {
                 "movido": f"{verbo} para {pasta_destino}/",
+                "duplicado": f"duplicado, {verbo} para {pasta_destino}/",
                 "ignorado": "ignorado (filtro de ano)",
                 "erro": "erro ao processar",
             }[status]
@@ -315,28 +446,44 @@ class OrganizadorApp:
                 ano_minimo,
                 mapa_categorias=mapa_categorias,
                 classificador_categoria=classificador,
+                regras=regras,
+                detectar_duplicados=detectar_duplicados,
                 simular=simular,
                 recursivo=recursivo,
                 progresso_callback=registrar_progresso,
             )
         except NotADirectoryError as exc:
-            messagebox.showerror("Organizador", str(exc))
+            if silencioso:
+                self._adicionar_linha_resultado(f"Erro: {exc}")
+                self._parar_monitoramento()
+            else:
+                messagebox.showerror("Organizador", str(exc))
             return
         finally:
-            self.botao_organizar.configure(
-                state="normal", text="Selecionar pasta e organizar"
-            )
+            if not silencioso:
+                self.botao_organizar.configure(state="normal", text=TEXTO_BOTAO_PADRAO)
 
-        self._mostrar_resultado(stats, simular)
+        organizer_history.registrar_operacao(stats["movimentos"])
+        self._atualizar_estado_botao_desfazer()
+        self._mostrar_resultado(stats, simular, silencioso)
 
-    def _mostrar_resultado(self, stats, simular):
-        if stats["movidos"] == stats["ignorados"] == len(stats["erros"]) == 0:
+    def _mostrar_resultado(self, stats, simular, silencioso=False):
+        if (
+            stats["movidos"] == stats["duplicados"] == stats["ignorados"] == 0
+            and not stats["erros"]
+        ):
             self._adicionar_linha_resultado("Nenhum arquivo encontrado na pasta.")
-            messagebox.showinfo("Organizador", "Nenhum arquivo encontrado na pasta.")
+            if not silencioso:
+                messagebox.showinfo("Organizador", "Nenhum arquivo encontrado na pasta.")
             return
 
         verbo = "seria(m) organizado(s)" if simular else "organizado(s) com sucesso"
         linhas = ["", f"{stats['movidos']} arquivo(s) {verbo}."]
+        if stats["duplicados"]:
+            linhas.append(
+                f"{stats['duplicados']} arquivo(s) duplicado(s) movido(s) para "
+                "\"duplicados/\"."
+            )
         if stats["ignorados"]:
             linhas.append(
                 f"{stats['ignorados']} arquivo(s) ignorado(s) pelo filtro de ano."
@@ -347,6 +494,9 @@ class OrganizadorApp:
 
         for linha in linhas:
             self._adicionar_linha_resultado(linha)
+
+        if silencioso:
+            return
 
         if stats["erros"]:
             messagebox.showwarning(

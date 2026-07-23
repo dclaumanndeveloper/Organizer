@@ -1,5 +1,7 @@
+import hashlib
 import json
 import os
+import re
 from datetime import datetime
 
 CATEGORIAS_PADRAO = {
@@ -35,6 +37,37 @@ def carregar_mapa_categorias(caminho_config=None):
     else:
         categorias_por_grupo = CATEGORIAS_PADRAO
     return expandir_categorias(categorias_por_grupo)
+
+
+def carregar_regras(caminho_config=None):
+    """Carrega regras de categorização por nome de arquivo, de um JSON.
+
+    Formato do arquivo: uma lista de objetos
+    `{"padrao": "<regex>", "categoria": "<nome>"}`. Cada arquivo é
+    testado contra os padrões, na ordem, e o primeiro que der match
+    define a categoria (ver `_categoria_por_regra`). Retorna uma lista
+    vazia se `caminho_config` não for informado ou não existir.
+    """
+    if not caminho_config or not os.path.exists(caminho_config):
+        return []
+    with open(caminho_config, "r", encoding="utf-8") as arquivo:
+        bruto = json.load(arquivo)
+    return [(re.compile(item["padrao"]), item["categoria"]) for item in bruto]
+
+
+def _categoria_por_regra(nome_arquivo, regras):
+    for padrao, categoria in regras:
+        if padrao.search(nome_arquivo):
+            return categoria
+    return None
+
+
+def _hash_arquivo(caminho_arquivo, tamanho_bloco=65536):
+    hasher = hashlib.sha256()
+    with open(caminho_arquivo, "rb") as arquivo:
+        for bloco in iter(lambda: arquivo.read(tamanho_bloco), b""):
+            hasher.update(bloco)
+    return hasher.hexdigest()
 
 
 def _extensao_arquivo(nome_arquivo):
@@ -103,6 +136,8 @@ def organizar_arquivos(
     ano_minimo=None,
     mapa_categorias=None,
     classificador_categoria=None,
+    regras=None,
+    detectar_duplicados=False,
     simular=False,
     recursivo=False,
     progresso_callback=None,
@@ -116,34 +151,51 @@ def organizar_arquivos(
       categoria (ex: "imagens") em vez de por extensão crua (ex: "png").
     - `classificador_categoria`: função opcional
       `(nome_arquivo, caminho_arquivo, extensao) -> categoria_ou_None`,
-      chamada antes do mapa de categorias para cada arquivo. Se retornar uma
-      categoria, ela tem prioridade sobre `mapa_categorias`; se retornar
-      `None` ou lançar uma exceção, cai de volta para `mapa_categorias`/
-      extensão. Usado para plugar classificação por IA sem acoplar esta
-      função a nenhum provedor específico.
+      chamada para cada arquivo (quando nenhuma regra por nome deu match).
+      Se retornar `None` ou lançar uma exceção, cai de volta para
+      `mapa_categorias`/extensão. Usado para plugar classificação por IA
+      sem acoplar esta função a nenhum provedor específico.
+    - `regras`: lista de `(regex_compilado, categoria)` (ver
+      `carregar_regras`). Testadas por nome de arquivo antes do
+      `classificador_categoria` e de `mapa_categorias` — regras explícitas
+      do usuário têm prioridade máxima.
+    - `detectar_duplicados`: se `True`, calcula o hash (SHA-256) de cada
+      arquivo; arquivos com o mesmo conteúdo de um já visto nesta execução
+      vão para uma pasta `duplicados` em vez de sua categoria normal
+      (nunca são apagados).
     - `simular`: se `True`, calcula o que seria feito sem mover nenhum
       arquivo nem criar pastas (modo de pré-visualização).
     - `recursivo`: se `True`, organiza também os arquivos de subpastas
       (cada subpasta ganha suas próprias pastas de destino, dentro dela
-      mesma). Pastas cujo nome coincida com uma categoria/`"sem_extensao"`
-      não são percorridas, para não reprocessar pastas de destino já
-      criadas em execuções anteriores.
+      mesma). Pastas cujo nome coincida com uma categoria/`"sem_extensao"`/
+      `"duplicados"` não são percorridas, para não reprocessar pastas de
+      destino já criadas em execuções anteriores.
     - `progresso_callback`: chamado a cada arquivo processado como
       `progresso_callback(indice, total, nome_arquivo, status, pasta_destino)`,
-      onde `status` é "movido", "ignorado" ou "erro". `nome_arquivo` e
-      `pasta_destino` são relativos a `diretorio` (podem incluir subpastas
-      quando `recursivo=True`).
+      onde `status` é "movido", "duplicado", "ignorado" ou "erro".
+      `nome_arquivo` e `pasta_destino` são relativos a `diretorio` (podem
+      incluir subpastas quando `recursivo=True`).
 
     Retorna um dicionário com as estatísticas da execução:
-    {"movidos": int, "ignorados": int, "erros": [str, ...]}
+    {"movidos": int, "duplicados": int, "ignorados": int, "erros": [str, ...],
+     "movimentos": [{"origem": str, "destino": str}, ...]}
+    `movimentos` lista apenas movimentações realmente feitas no disco (nunca
+    em modo `simular`) e serve de entrada para `organizer_history.registrar_operacao`.
     """
     if not diretorio or not os.path.isdir(diretorio):
         raise NotADirectoryError(f"Diretório inválido: {diretorio!r}")
 
-    stats = {"movidos": 0, "ignorados": 0, "erros": []}
+    stats = {
+        "movidos": 0,
+        "duplicados": 0,
+        "ignorados": 0,
+        "erros": [],
+        "movimentos": [],
+    }
 
     pastas_reservadas = set(mapa_categorias.values()) if mapa_categorias else set()
     pastas_reservadas.add("sem_extensao")
+    pastas_reservadas.add("duplicados")
 
     diretorios = _diretorios_a_processar(diretorio, recursivo, pastas_reservadas)
 
@@ -159,6 +211,7 @@ def organizar_arquivos(
         total += len(nomes)
 
     destinos_reservados = set()
+    hashes_vistos = {} if detectar_duplicados else None
     indice = 0
 
     for pasta_atual in diretorios:
@@ -182,19 +235,43 @@ def organizar_arquivos(
                         progresso_callback(indice, total, nome_exibicao, "erro", None)
                     continue
 
-            extensao = _extensao_arquivo(nome_arquivo)
-            categoria = None
-            if classificador_categoria is not None and extensao != "sem_extensao":
+            eh_duplicado = False
+            if detectar_duplicados:
                 try:
-                    categoria = classificador_categoria(
-                        nome_arquivo, caminho_origem, extensao
-                    )
-                except Exception:
-                    categoria = None
+                    hash_arquivo = _hash_arquivo(caminho_origem)
+                except OSError as exc:
+                    stats["erros"].append(f"{nome_exibicao}: {exc}")
+                    if progresso_callback is not None:
+                        progresso_callback(indice, total, nome_exibicao, "erro", None)
+                    continue
+                if hash_arquivo in hashes_vistos:
+                    eh_duplicado = True
+                else:
+                    hashes_vistos[hash_arquivo] = nome_exibicao
 
-            pasta_destino_nome = categoria or _pasta_destino(extensao, mapa_categorias)
+            extensao = _extensao_arquivo(nome_arquivo)
+
+            if eh_duplicado:
+                pasta_destino_nome = "duplicados"
+            else:
+                categoria = _categoria_por_regra(nome_arquivo, regras) if regras else None
+                if (
+                    categoria is None
+                    and classificador_categoria is not None
+                    and extensao != "sem_extensao"
+                ):
+                    try:
+                        categoria = classificador_categoria(
+                            nome_arquivo, caminho_origem, extensao
+                        )
+                    except Exception:
+                        categoria = None
+                pasta_destino_nome = categoria or _pasta_destino(
+                    extensao, mapa_categorias
+                )
+
             pasta_destino = os.path.join(pasta_atual, pasta_destino_nome)
-            status = "movido"
+            status = "duplicado" if eh_duplicado else "movido"
 
             try:
                 caminho_destino = _destino_sem_colisao(
@@ -204,7 +281,13 @@ def organizar_arquivos(
                 if not simular:
                     os.makedirs(pasta_destino, exist_ok=True)
                     os.replace(caminho_origem, caminho_destino)
-                stats["movidos"] += 1
+                    stats["movimentos"].append(
+                        {"origem": caminho_origem, "destino": caminho_destino}
+                    )
+                if eh_duplicado:
+                    stats["duplicados"] += 1
+                else:
+                    stats["movidos"] += 1
             except OSError as exc:
                 stats["erros"].append(f"{nome_exibicao}: {exc}")
                 status = "erro"

@@ -5,6 +5,8 @@ import pytest
 
 tk = pytest.importorskip("tkinter")
 
+import organizer_config  # noqa: E402
+import organizer_history  # noqa: E402
 from organizer import OrganizadorApp  # noqa: E402
 
 
@@ -28,8 +30,21 @@ def tk_root():
 
 @pytest.fixture
 def app(tmp_path, monkeypatch, tk_root):
-    monkeypatch.setenv("HOME", str(tmp_path / "home"))
-    os.makedirs(tmp_path / "home", exist_ok=True)
+    # Isola config/historico apontando as funcoes "caminho padrao" para
+    # dentro de tmp_path, em vez de depender da variavel de ambiente HOME:
+    # no Windows, os.path.expanduser("~") usa USERPROFILE (nao HOME), entao
+    # monkeypatch.setenv("HOME", ...) nao isola nada la e os testes vazam
+    # estado real entre si via ~/.organizador_arquivos.
+    monkeypatch.setattr(
+        organizer_config,
+        "caminho_config_padrao",
+        lambda: str(tmp_path / "config.json"),
+    )
+    monkeypatch.setattr(
+        organizer_history,
+        "caminho_historico_padrao",
+        lambda: str(tmp_path / "historico.json"),
+    )
     window = tk.Toplevel(tk_root)
     aplicativo = OrganizadorApp(window)
     window.update()
@@ -88,3 +103,133 @@ def test_ano_invalido_mostra_erro(app, tmp_path):
 
     assert mock_msgbox.showerror.called
     assert os.listdir(pasta) == ["foto.jpg"]
+
+
+def test_botao_desfazer_comeca_desabilitado(app):
+    assert str(app.botao_desfazer.cget("state")) == "disabled"
+
+
+def test_desfazer_reverte_ultima_organizacao(app, tmp_path):
+    pasta = tmp_path / "arquivos"
+    pasta.mkdir()
+    _criar_arquivo(pasta, "foto.jpg")
+
+    with patch("organizer.filedialog") as mock_fd, patch("organizer.messagebox"):
+        mock_fd.askdirectory.return_value = str(pasta)
+        app._selecionar_e_organizar()
+
+    assert str(app.botao_desfazer.cget("state")) == "normal"
+    assert os.listdir(pasta) == ["jpg"]
+
+    with patch("organizer.messagebox") as mock_msgbox:
+        app._desfazer_ultima_organizacao()
+
+    assert os.path.exists(pasta / "foto.jpg")
+    assert mock_msgbox.showinfo.called
+    assert str(app.botao_desfazer.cget("state")) == "disabled"
+
+
+def test_detectar_duplicados_move_para_pasta_duplicados(app, tmp_path):
+    pasta = tmp_path / "arquivos"
+    pasta.mkdir()
+    _criar_arquivo(pasta, "a.txt", conteudo="repetido")
+    _criar_arquivo(pasta, "b.txt", conteudo="repetido")
+
+    with patch("organizer.filedialog") as mock_fd, patch("organizer.messagebox"):
+        mock_fd.askdirectory.return_value = str(pasta)
+        app.var_duplicados.set(True)
+        app._selecionar_e_organizar()
+
+    assert os.path.isdir(pasta / "duplicados")
+    assert len(os.listdir(pasta / "duplicados")) == 1
+
+
+def test_regras_personalizadas_tem_prioridade(app, tmp_path, monkeypatch):
+    pasta = tmp_path / "arquivos"
+    pasta.mkdir()
+    _criar_arquivo(pasta, "fatura_junho.pdf")
+
+    caminho_regras = tmp_path / "regras.json"
+    caminho_regras.write_text(
+        '[{"padrao": "(?i)fatura", "categoria": "financeiro"}]'
+    )
+    monkeypatch.setattr("organizer.CAMINHO_REGRAS", str(caminho_regras))
+
+    with patch("organizer.filedialog") as mock_fd, patch("organizer.messagebox"):
+        mock_fd.askdirectory.return_value = str(pasta)
+        app.var_regras.set(True)
+        app._selecionar_e_organizar()
+
+    assert os.listdir(pasta / "financeiro") == ["fatura_junho.pdf"]
+
+
+def test_iniciar_monitoramento_organiza_na_hora_e_agenda_proximo_ciclo(app, tmp_path):
+    pasta = tmp_path / "arquivos"
+    pasta.mkdir()
+    _criar_arquivo(pasta, "foto.jpg")
+
+    with patch("organizer.filedialog") as mock_fd, patch("organizer.messagebox"):
+        mock_fd.askdirectory.return_value = str(pasta)
+        app.var_monitorar.set(True)
+        app._selecionar_e_organizar()
+
+    assert app.monitorando is True
+    assert app._id_agendamento_monitoramento is not None
+    assert app.botao_organizar.cget("text") == "Parar monitoramento"
+    assert os.listdir(pasta) == ["jpg"]
+
+    app._parar_monitoramento()
+
+
+def test_clicar_botao_durante_monitoramento_para_sem_reabrir_dialogo(app, tmp_path):
+    pasta = tmp_path / "arquivos"
+    pasta.mkdir()
+    _criar_arquivo(pasta, "foto.jpg")
+
+    with patch("organizer.filedialog") as mock_fd, patch("organizer.messagebox"):
+        mock_fd.askdirectory.return_value = str(pasta)
+        app.var_monitorar.set(True)
+        app._selecionar_e_organizar()
+
+        mock_fd.reset_mock()
+        app._selecionar_e_organizar()
+
+        assert not mock_fd.askdirectory.called
+
+    assert app.monitorando is False
+    assert app._id_agendamento_monitoramento is None
+    assert app.botao_organizar.cget("text") == "Selecionar pasta e organizar"
+
+
+def test_desmarcar_checkbox_monitorar_para_monitoramento_ativo(app, tmp_path):
+    pasta = tmp_path / "arquivos"
+    pasta.mkdir()
+    _criar_arquivo(pasta, "foto.jpg")
+
+    with patch("organizer.filedialog") as mock_fd, patch("organizer.messagebox"):
+        mock_fd.askdirectory.return_value = str(pasta)
+        app.var_monitorar.set(True)
+        app._selecionar_e_organizar()
+
+    app.var_monitorar.set(False)
+    app._ao_alternar_checkbox_monitorar()
+
+    assert app.monitorando is False
+    assert app._id_agendamento_monitoramento is None
+
+
+def test_ciclo_de_monitoramento_silencioso_nao_abre_messagebox(app, tmp_path):
+    pasta = tmp_path / "arquivos"
+    pasta.mkdir()
+    _criar_arquivo(pasta, "foto.jpg")
+
+    with patch("organizer.filedialog") as mock_fd, patch("organizer.messagebox") as mock_msgbox:
+        mock_fd.askdirectory.return_value = str(pasta)
+        app.var_monitorar.set(True)
+        app._selecionar_e_organizar()
+
+        assert not mock_msgbox.showinfo.called
+        assert not mock_msgbox.showwarning.called
+        assert not mock_msgbox.showerror.called
+
+    app._parar_monitoramento()

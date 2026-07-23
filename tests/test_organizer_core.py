@@ -6,6 +6,7 @@ import pytest
 
 from organizer_core import (
     carregar_mapa_categorias,
+    carregar_regras,
     expandir_categorias,
     organizar_arquivos,
 )
@@ -272,3 +273,109 @@ def test_progresso_callback_usa_caminho_relativo_em_modo_recursivo(tmp_path):
     )
 
     assert chamadas == [(os.path.join("sub", "nota.txt"), os.path.join("sub", "txt"))]
+
+
+def test_carregar_regras_sem_arquivo_retorna_vazio(tmp_path):
+    assert carregar_regras(str(tmp_path / "nao_existe.json")) == []
+
+
+def test_carregar_regras_le_arquivo(tmp_path):
+    caminho = tmp_path / "regras.json"
+    caminho.write_text(
+        json.dumps([{"padrao": "(?i)fatura", "categoria": "financeiro"}])
+    )
+
+    regras = carregar_regras(str(caminho))
+
+    assert len(regras) == 1
+    assert regras[0][1] == "financeiro"
+    assert regras[0][0].search("FATURA_boleto.pdf")
+
+
+def test_regra_por_nome_tem_prioridade_sobre_categoria_e_extensao(tmp_path):
+    _criar_arquivo(tmp_path, "fatura_junho.pdf")
+    regras = carregar_regras_de_lista([{"padrao": "(?i)fatura", "categoria": "financeiro"}])
+
+    stats = organizar_arquivos(
+        str(tmp_path), mapa_categorias=carregar_mapa_categorias(), regras=regras
+    )
+
+    assert stats["movidos"] == 1
+    assert os.listdir(tmp_path / "financeiro") == ["fatura_junho.pdf"]
+
+
+def test_regra_por_nome_tem_prioridade_sobre_classificador_ia(tmp_path):
+    _criar_arquivo(tmp_path, "fatura_junho.pdf")
+    regras = carregar_regras_de_lista([{"padrao": "(?i)fatura", "categoria": "financeiro"}])
+
+    stats = organizar_arquivos(
+        str(tmp_path),
+        regras=regras,
+        classificador_categoria=lambda nome, caminho, extensao: "outros",
+    )
+
+    assert stats["movidos"] == 1
+    assert os.listdir(tmp_path / "financeiro") == ["fatura_junho.pdf"]
+
+
+def test_sem_match_de_regra_cai_para_categoria(tmp_path):
+    _criar_arquivo(tmp_path, "ferias.pdf")
+    regras = carregar_regras_de_lista([{"padrao": "(?i)fatura", "categoria": "financeiro"}])
+
+    stats = organizar_arquivos(
+        str(tmp_path), mapa_categorias=carregar_mapa_categorias(), regras=regras
+    )
+
+    assert stats["movidos"] == 1
+    assert os.listdir(tmp_path / "documentos") == ["ferias.pdf"]
+
+
+def test_detectar_duplicados_move_arquivo_repetido_para_pasta_propria(tmp_path):
+    _criar_arquivo(tmp_path, "a.txt", conteudo="mesmo conteudo")
+    _criar_arquivo(tmp_path, "b.txt", conteudo="mesmo conteudo")
+    _criar_arquivo(tmp_path, "c.txt", conteudo="conteudo diferente")
+
+    stats = organizar_arquivos(str(tmp_path), detectar_duplicados=True)
+
+    assert stats["duplicados"] == 1
+    assert stats["movidos"] == 2
+    duplicados = os.listdir(tmp_path / "duplicados")
+    assert len(duplicados) == 1 and duplicados[0] in {"a.txt", "b.txt"}
+    restante = duplicados[0]
+    assert set(os.listdir(tmp_path / "txt")) == {"a.txt", "b.txt", "c.txt"} - {restante}
+
+
+def test_sem_detectar_duplicados_nao_ha_pasta_duplicados(tmp_path):
+    _criar_arquivo(tmp_path, "a.txt", conteudo="mesmo conteudo")
+    _criar_arquivo(tmp_path, "b.txt", conteudo="mesmo conteudo")
+
+    stats = organizar_arquivos(str(tmp_path))
+
+    assert stats["duplicados"] == 0
+    assert not os.path.exists(tmp_path / "duplicados")
+    assert set(os.listdir(tmp_path / "txt")) == {"a.txt", "b.txt"}
+
+
+def test_stats_movimentos_lista_origem_e_destino_reais(tmp_path):
+    _criar_arquivo(tmp_path, "foto.jpg")
+
+    stats = organizar_arquivos(str(tmp_path))
+
+    assert len(stats["movimentos"]) == 1
+    movimento = stats["movimentos"][0]
+    assert movimento["origem"] == str(tmp_path / "foto.jpg")
+    assert movimento["destino"] == str(tmp_path / "jpg" / "foto.jpg")
+
+
+def test_stats_movimentos_vazio_em_modo_simular(tmp_path):
+    _criar_arquivo(tmp_path, "foto.jpg")
+
+    stats = organizar_arquivos(str(tmp_path), simular=True)
+
+    assert stats["movimentos"] == []
+
+
+def carregar_regras_de_lista(lista):
+    import re
+
+    return [(re.compile(item["padrao"]), item["categoria"]) for item in lista]
