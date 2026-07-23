@@ -45,6 +45,11 @@ def app(tmp_path, monkeypatch, tk_root):
         "caminho_historico_padrao",
         lambda: str(tmp_path / "historico.json"),
     )
+    monkeypatch.setattr(
+        organizer_config,
+        "caminho_perfis_padrao",
+        lambda: str(tmp_path / "perfis.json"),
+    )
     window = tk.Toplevel(tk_root)
     aplicativo = OrganizadorApp(window)
     window.update()
@@ -292,3 +297,76 @@ def test_trocar_idioma_persiste_escolha_no_config(app, tmp_path):
     from organizer_config import carregar_config
 
     assert carregar_config(str(tmp_path / "config.json"))["idioma"] == "es"
+
+
+def test_salvar_perfil_sem_nome_mostra_aviso(app):
+    app.combo_perfil.set("")
+
+    with patch("organizer.messagebox") as mock_msgbox:
+        app._salvar_perfil_atual()
+
+        assert mock_msgbox.showwarning.called
+
+
+def test_salvar_perfil_persiste_e_atualiza_combobox(app, tmp_path):
+    app.var_simular.set(True)
+    app.entry_ano.insert(0, "2021")
+    app.combo_perfil.set("trabalho")
+
+    with patch("organizer.messagebox"):
+        app._salvar_perfil_atual()
+
+    from organizer_config import carregar_perfil
+
+    perfil = carregar_perfil("trabalho", str(tmp_path / "perfis.json"))
+    assert perfil is not None
+    assert perfil["simular"] is True
+    assert perfil["ano_minimo"] == "2021"
+    assert "trabalho" in app.combo_perfil.cget("values")
+
+
+def test_selecionar_perfil_aplica_configuracoes_salvas(app, tmp_path):
+    pasta = tmp_path / "fotos"
+    pasta.mkdir()
+    app.var_duplicados.set(True)
+    app.entry_ano.insert(0, "2018")
+    app.ultimo_diretorio = str(pasta)
+    app.combo_perfil.set("fotos_perfil")
+    with patch("organizer.messagebox"):
+        app._salvar_perfil_atual()
+
+    # Reseta o estado da UI antes de recarregar o perfil, para garantir
+    # que os valores vieram mesmo do perfil salvo.
+    app.var_duplicados.set(False)
+    app.entry_ano.delete(0, "end")
+    app.label_diretorio.configure(text="")
+
+    app.combo_perfil.set("fotos_perfil")
+    app._carregar_perfil_selecionado()
+
+    assert app.var_duplicados.get() is True
+    assert app.entry_ano.get() == "2018"
+    assert app.label_diretorio.cget("text") == str(pasta)
+
+
+def test_excluir_perfil_inexistente_mostra_aviso(app):
+    app.combo_perfil.set("nao_existe")
+
+    with patch("organizer.messagebox") as mock_msgbox:
+        app._excluir_perfil_atual()
+
+        assert mock_msgbox.showinfo.called
+
+
+def test_excluir_perfil_existente_remove_da_lista(app, tmp_path):
+    app.combo_perfil.set("temporario")
+    with patch("organizer.messagebox"):
+        app._salvar_perfil_atual()
+        assert "temporario" in app.combo_perfil.cget("values")
+
+        app._excluir_perfil_atual()
+
+    from organizer_config import carregar_perfil
+
+    assert carregar_perfil("temporario", str(tmp_path / "perfis.json")) is None
+    assert "temporario" not in app.combo_perfil.cget("values")

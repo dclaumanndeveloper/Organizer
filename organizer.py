@@ -7,7 +7,14 @@ from typing import Any
 
 import organizer_ai
 import organizer_history
-from organizer_config import carregar_config, salvar_config
+from organizer_config import (
+    carregar_config,
+    carregar_perfil,
+    excluir_perfil,
+    listar_perfis,
+    salvar_config,
+    salvar_perfil,
+)
 from organizer_core import (
     ClassificadorCategoria,
     MapaCategorias,
@@ -170,6 +177,32 @@ class OrganizadorApp:
         self.combo_idioma.pack(anchor="e", pady=(2, 0))
 
         ttk.Frame(container, style="App.TFrame").pack(pady=(8, 0))
+
+        self.rotulo_perfil = ttk.Label(
+            container, text=self._t("rotulo_perfil"), style="FieldLabel.TLabel"
+        )
+        self.rotulo_perfil.pack(anchor="w")
+        perfil_frame = ttk.Frame(container, style="App.TFrame")
+        perfil_frame.pack(fill="x", pady=(6, 16))
+        self.combo_perfil = ttk.Combobox(
+            perfil_frame, values=sorted(listar_perfis()), font=("Segoe UI", 9)
+        )
+        self.combo_perfil.pack(side="left", fill="x", expand=True)
+        self.combo_perfil.bind(
+            "<<ComboboxSelected>>", self._carregar_perfil_selecionado
+        )
+        self.botao_salvar_perfil = ttk.Button(
+            perfil_frame,
+            text=self._t("botao_salvar_perfil"),
+            command=self._salvar_perfil_atual,
+        )
+        self.botao_salvar_perfil.pack(side="left", padx=(8, 0))
+        self.botao_excluir_perfil = ttk.Button(
+            perfil_frame,
+            text=self._t("botao_excluir_perfil"),
+            command=self._excluir_perfil_atual,
+        )
+        self.botao_excluir_perfil.pack(side="left", padx=(8, 0))
 
         self.rotulo_pasta = ttk.Label(
             container, text=self._t("rotulo_pasta"), style="FieldLabel.TLabel"
@@ -359,6 +392,9 @@ class OrganizadorApp:
         self.check_duplicados.configure(text=self._t("check_duplicados"))
         self.check_regras.configure(text=self._t("check_regras"))
         self.check_monitorar.configure(text=self._texto_check_monitorar())
+        self.rotulo_perfil.configure(text=self._t("rotulo_perfil"))
+        self.botao_salvar_perfil.configure(text=self._t("botao_salvar_perfil"))
+        self.botao_excluir_perfil.configure(text=self._t("botao_excluir_perfil"))
         self.botao_organizar.configure(text=self._texto_botao_atual())
         self.botao_desfazer.configure(text=self._t("botao_desfazer"))
         self.rotulo_resultado.configure(text=self._t("rotulo_resultado"))
@@ -440,6 +476,85 @@ class OrganizadorApp:
             )
 
         self._atualizar_estado_botao_desfazer()
+
+    def _config_atual_para_perfil(self) -> dict[str, Any]:
+        return {
+            "ultimo_diretorio": self.ultimo_diretorio,
+            "ano_minimo": self.entry_ano.get().strip(),
+            "simular": self.var_simular.get(),
+            "categorias": self.var_categorias.get(),
+            "ia": self.var_ia.get(),
+            "recursivo": self.var_recursivo.get(),
+            "duplicados": self.var_duplicados.get(),
+            "regras": self.var_regras.get(),
+            "monitorar": self.var_monitorar.get(),
+        }
+
+    def _aplicar_perfil(self, dados: dict[str, Any]) -> None:
+        diretorio = dados.get("ultimo_diretorio")
+        if diretorio and os.path.isdir(diretorio):
+            self.ultimo_diretorio = diretorio
+            self._diretorio_selecionado = True
+            self.label_diretorio.configure(text=diretorio)
+
+        self.entry_ano.delete(0, "end")
+        ano_minimo = dados.get("ano_minimo", "")
+        if ano_minimo:
+            self.entry_ano.insert(0, ano_minimo)
+
+        self.var_simular.set(bool(dados.get("simular", False)))
+        self.var_categorias.set(bool(dados.get("categorias", False)))
+        self.var_ia.set(bool(dados.get("ia", False)))
+        self.var_recursivo.set(bool(dados.get("recursivo", False)))
+        self.var_duplicados.set(bool(dados.get("duplicados", False)))
+        self.var_regras.set(bool(dados.get("regras", False)))
+        self.var_monitorar.set(bool(dados.get("monitorar", False)))
+
+    def _atualizar_lista_perfis(self) -> None:
+        self.combo_perfil.configure(values=sorted(listar_perfis()))
+
+    def _salvar_perfil_atual(self) -> None:
+        nome = self.combo_perfil.get().strip()
+        if not nome:
+            messagebox.showwarning(
+                self._t("titulo_organizador"), self._t("aviso_perfil_sem_nome")
+            )
+            return
+
+        salvar_perfil(nome, self._config_atual_para_perfil())
+        self._atualizar_lista_perfis()
+        messagebox.showinfo(
+            self._t("titulo_organizador"), self._t("info_perfil_salvo", nome=nome)
+        )
+
+    def _carregar_perfil_selecionado(self, event: object = None) -> None:
+        nome = self.combo_perfil.get().strip()
+        if not nome:
+            return
+        dados = carregar_perfil(nome)
+        if dados is not None:
+            self._aplicar_perfil(dados)
+
+    def _excluir_perfil_atual(self) -> None:
+        nome = self.combo_perfil.get().strip()
+        if not nome:
+            messagebox.showwarning(
+                self._t("titulo_organizador"), self._t("aviso_perfil_sem_nome")
+            )
+            return
+
+        if excluir_perfil(nome):
+            self.combo_perfil.set("")
+            self._atualizar_lista_perfis()
+            messagebox.showinfo(
+                self._t("titulo_organizador"),
+                self._t("info_perfil_excluido", nome=nome),
+            )
+        else:
+            messagebox.showinfo(
+                self._t("titulo_organizador"),
+                self._t("aviso_perfil_nao_encontrado", nome=nome),
+            )
 
     def _ao_alternar_checkbox_monitorar(self) -> None:
         if not self.var_monitorar.get() and self.monitorando:
