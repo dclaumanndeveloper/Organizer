@@ -151,7 +151,10 @@ pip install -r requirements-dev.txt
 ruff check .
 black --check .   # ou "black ." para formatar automaticamente
 mypy .
+pytest --cov --cov-report=term-missing
 ```
+
+A suíte também mede cobertura de testes (`pytest-cov`), com um mínimo de 85% configurado em `pyproject.toml` (`[tool.coverage.report].fail_under`) — a suíte falha se a cobertura cair abaixo disso. A cobertura atual gira em torno de 90%.
 
 ## Licença
 

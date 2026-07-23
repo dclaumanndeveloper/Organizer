@@ -52,8 +52,8 @@ jobs:
 
     - name: Run tests (Linux, com display virtual)
       if: runner.os == 'Linux'
-      run: xvfb-run -a pytest -v
+      run: xvfb-run -a pytest -v --cov --cov-report=term-missing
 
     - name: Run tests
       if: runner.os != 'Linux'
-      run: pytest -v
+      run: pytest -v --cov --cov-report=term-missing

@@ -15,3 +15,14 @@ python_version = "3.11"
 exclude = ["^tests/", "^build/", "^dist/"]
 warn_unused_ignores = true
 warn_redundant_casts = true
+
+[tool.coverage.run]
+source = ["."]
+omit = ["tests/*", "build/*", "dist/*"]
+
+[tool.coverage.report]
+fail_under = 85
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+]
