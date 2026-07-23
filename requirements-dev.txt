@@ -4,3 +4,4 @@ pyinstaller>=6.0
 ruff>=0.6
 black>=24.0
 mypy>=1.10
+build>=1.2

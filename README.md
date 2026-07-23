@@ -128,6 +128,21 @@ A release fica em rascunho, pronta para revisão e publicação manual.
 
 **Nota sobre assinatura de código**: nenhum dos artefatos é assinado digitalmente (não há certificado de desenvolvedor configurado). Isso significa que o Windows Defender SmartScreen e o Gatekeeper do macOS provavelmente vão avisar que o app é de "desenvolvedor desconhecido" no primeiro uso — no macOS, é necessário clicar com o botão direito no `.app` e escolher "Abrir" (em vez de dar duplo-clique) para contornar isso. Instaladores nativos completos (NSIS/Inno Setup no Windows, `.deb`/AppImage no Linux) e assinatura de código ainda não foram implementados — ficam como possíveis melhorias futuras.
 
+## Empacotando para o PyPI
+
+O projeto também tem metadados de empacotamento padrão (`[project]` em `pyproject.toml`, usando `setuptools` como build backend), então dá para gerar um pacote instalável via `pip` sem depender do PyInstaller:
+
+```bash
+pip install build
+python -m build
+```
+
+Isso gera `dist/organizador_arquivos-<versão>.tar.gz` (sdist) e `dist/organizador_arquivos-<versão>-py3-none-any.whl` (wheel). Instalar o wheel expõe um comando `organizador-arquivos` no PATH (via `[project.scripts]`), que executa `organizer:main()`.
+
+O CI (`.github/workflows/test.yml`, job `build-package`) já valida que o pacote é gerado corretamente e passa em `twine check` a cada push/PR.
+
+**Sobre publicação real no PyPI**: existe um workflow pronto (`.github/workflows/publish.yml`), disparado ao publicar uma release do GitHub ou manualmente pela aba Actions, que builda o pacote e o publica via [trusted publishing](https://docs.pypi.org/trusted-publishers/) (OIDC, sem precisar guardar um token de API como secret). Esse workflow **não publica nada sozinho**: antes de usá-lo de verdade, o dono do projeto precisa criar o pacote `organizador-arquivos` no PyPI e configurá-lo como *trusted publisher* apontando para este repositório/workflow/ambiente (`pypi`) — isso só pode ser feito por quem tem uma conta no PyPI, então não foi (e não pôde ser) executado aqui.
+
 ## Como Rodar os Testes
 
 A suíte cobre `organizer_core.py`, `organizer_config.py`, `organizer_ai.py` (com o Ollama mockado) e também `organizer.py` (a UI Tkinter, em `tests/test_organizer_ui.py`), simulando cliques e verificando o estado da janela:
