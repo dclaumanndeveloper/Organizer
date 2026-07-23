@@ -1,0 +1,92 @@
+import os
+import time
+
+import pytest
+
+from organizer_core import organizar_arquivos
+
+
+def _criar_arquivo(diretorio, nome, conteudo="conteudo"):
+    caminho = os.path.join(diretorio, nome)
+    with open(caminho, "w") as arquivo:
+        arquivo.write(conteudo)
+    return caminho
+
+
+def test_organiza_arquivos_por_extensao(tmp_path):
+    _criar_arquivo(tmp_path, "foto.png")
+    _criar_arquivo(tmp_path, "documento.pdf")
+    _criar_arquivo(tmp_path, "outro.PNG")
+
+    stats = organizar_arquivos(str(tmp_path))
+
+    assert stats["movidos"] == 3
+    assert stats["erros"] == []
+    assert set(os.listdir(tmp_path)) == {"png", "pdf"}
+    assert set(os.listdir(tmp_path / "png")) == {"foto.png", "outro.PNG"}
+    assert os.listdir(tmp_path / "pdf") == ["documento.pdf"]
+
+
+def test_arquivo_sem_extensao_vai_para_pasta_propria(tmp_path):
+    _criar_arquivo(tmp_path, "LEIAME")
+
+    stats = organizar_arquivos(str(tmp_path))
+
+    assert stats["movidos"] == 1
+    assert os.listdir(tmp_path / "sem_extensao") == ["LEIAME"]
+
+
+def test_arquivo_oculto_nao_vira_nome_de_pasta_gigante(tmp_path):
+    _criar_arquivo(tmp_path, ".env")
+
+    stats = organizar_arquivos(str(tmp_path))
+
+    assert stats["movidos"] == 1
+    assert os.listdir(tmp_path / "sem_extensao") == [".env"]
+
+
+def test_diretorio_invalido_gera_erro(tmp_path):
+    with pytest.raises(NotADirectoryError):
+        organizar_arquivos(str(tmp_path / "nao_existe"))
+
+
+def test_diretorio_vazio_gera_erro(tmp_path):
+    with pytest.raises(NotADirectoryError):
+        organizar_arquivos("")
+
+
+def test_colisao_de_nomes_nao_sobrescreve_arquivo_existente(tmp_path):
+    pasta_txt = tmp_path / "txt"
+    pasta_txt.mkdir()
+    (pasta_txt / "notas.txt").write_text("original")
+    _criar_arquivo(tmp_path, "notas.txt", conteudo="novo")
+
+    stats = organizar_arquivos(str(tmp_path))
+
+    assert stats["movidos"] == 1
+    assert stats["erros"] == []
+    arquivos = set(os.listdir(pasta_txt))
+    assert "notas.txt" in arquivos
+    assert any(nome.startswith("notas_") for nome in arquivos)
+    assert (pasta_txt / "notas.txt").read_text() == "original"
+
+
+def test_filtro_por_ano_ignora_arquivos_antigos(tmp_path):
+    caminho = _criar_arquivo(tmp_path, "antigo.txt")
+    timestamp_antigo = time.mktime((2015, 1, 1, 0, 0, 0, 0, 0, 0))
+    os.utime(caminho, (timestamp_antigo, timestamp_antigo))
+
+    stats = organizar_arquivos(str(tmp_path), ano_minimo=2020)
+
+    assert stats["movidos"] == 0
+    assert stats["ignorados"] == 1
+    assert os.path.exists(caminho)
+
+
+def test_filtro_por_ano_move_arquivos_recentes(tmp_path):
+    _criar_arquivo(tmp_path, "recente.txt")
+
+    stats = organizar_arquivos(str(tmp_path), ano_minimo=2000)
+
+    assert stats["movidos"] == 1
+    assert stats["ignorados"] == 0
