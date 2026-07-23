@@ -28,11 +28,15 @@ def _destino_sem_colisao(caminho_destino):
         contador += 1
 
 
-def organizar_arquivos(diretorio, ano_minimo=None):
+def organizar_arquivos(diretorio, ano_minimo=None, progresso_callback=None):
     """Organiza os arquivos de `diretorio` em subpastas por extensão.
 
     Se `ano_minimo` for informado, arquivos cuja última modificação seja
     anterior a esse ano são ignorados (não são movidos).
+
+    Se `progresso_callback` for informado, é chamado a cada arquivo
+    processado como `progresso_callback(indice, total, nome_arquivo, status)`,
+    onde `status` é uma das strings "movido", "ignorado" ou "erro".
 
     Retorna um dicionário com as estatísticas da execução:
     {"movidos": int, "ignorados": int, "erros": [str, ...]}
@@ -47,17 +51,23 @@ def organizar_arquivos(diretorio, ano_minimo=None):
         for nome in os.listdir(diretorio)
         if os.path.isfile(os.path.join(diretorio, nome))
     ]
+    total = len(nomes_arquivos)
 
-    for nome_arquivo in nomes_arquivos:
+    for indice, nome_arquivo in enumerate(nomes_arquivos, start=1):
         caminho_origem = os.path.join(diretorio, nome_arquivo)
+        status = "movido"
 
         if ano_minimo is not None:
             try:
                 if _ano_modificacao(caminho_origem) < ano_minimo:
                     stats["ignorados"] += 1
+                    if progresso_callback is not None:
+                        progresso_callback(indice, total, nome_arquivo, "ignorado")
                     continue
             except OSError as exc:
                 stats["erros"].append(f"{nome_arquivo}: {exc}")
+                if progresso_callback is not None:
+                    progresso_callback(indice, total, nome_arquivo, "erro")
                 continue
 
         pasta_destino = os.path.join(diretorio, _extensao_arquivo(nome_arquivo))
@@ -71,5 +81,9 @@ def organizar_arquivos(diretorio, ano_minimo=None):
             stats["movidos"] += 1
         except OSError as exc:
             stats["erros"].append(f"{nome_arquivo}: {exc}")
+            status = "erro"
+
+        if progresso_callback is not None:
+            progresso_callback(indice, total, nome_arquivo, status)
 
     return stats
