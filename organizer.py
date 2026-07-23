@@ -1,11 +1,20 @@
+from __future__ import annotations
+
 import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
+from typing import Any
 
 import organizer_ai
 import organizer_history
 from organizer_config import carregar_config, salvar_config
-from organizer_core import carregar_mapa_categorias, carregar_regras, organizar_arquivos
+from organizer_core import (
+    ClassificadorCategoria,
+    MapaCategorias,
+    carregar_mapa_categorias,
+    carregar_regras,
+    organizar_arquivos,
+)
 from organizer_i18n import IDIOMA_PADRAO, IDIOMAS_DISPONIVEIS, t
 
 BG_COLOR = "#FAFBFF"
@@ -18,9 +27,7 @@ PRIMARY_HOVER = "#3B4BC0"
 CAMINHO_CATEGORIAS = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "categorias.json"
 )
-CAMINHO_REGRAS = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "regras.json"
-)
+CAMINHO_REGRAS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "regras.json")
 
 INTERVALO_MONITORAMENTO_MS = 30_000
 
@@ -29,7 +36,7 @@ class OrganizadorApp:
     LARGURA = 560
     ALTURA = 560
 
-    def __init__(self, window):
+    def __init__(self, window: tk.Tk | tk.Toplevel) -> None:
         self.window = window
         config = carregar_config()
         self.idioma = config.get("idioma") or IDIOMA_PADRAO
@@ -44,7 +51,7 @@ class OrganizadorApp:
         self.var_monitorar = tk.BooleanVar(value=config.get("monitorar", False))
 
         self.monitorando = False
-        self._id_agendamento_monitoramento = None
+        self._id_agendamento_monitoramento: str | None = None
         self._estado_botao_organizar = "padrao"
         self._diretorio_selecionado = bool(
             self.ultimo_diretorio and os.path.isdir(self.ultimo_diretorio)
@@ -55,22 +62,22 @@ class OrganizadorApp:
         self._configurar_estilos()
         self._construir_layout()
 
-    def _t(self, chave, **kwargs):
+    def _t(self, chave: str, **kwargs: Any) -> str:
         return t(self.idioma, chave, **kwargs)
 
-    def _configurar_janela(self):
+    def _configurar_janela(self) -> None:
         self.window.title(self._t("titulo_janela"))
         self.window.configure(bg=BG_COLOR)
         self.window.minsize(480, 500)
         self._centralizar_janela()
 
-    def _centralizar_janela(self):
+    def _centralizar_janela(self) -> None:
         self.window.update_idletasks()
         x = (self.window.winfo_screenwidth() // 2) - (self.LARGURA // 2)
         y = (self.window.winfo_screenheight() // 2) - (self.ALTURA // 2)
         self.window.geometry(f"{self.LARGURA}x{self.ALTURA}+{x}+{y}")
 
-    def _configurar_estilos(self):
+    def _configurar_estilos(self) -> None:
         style = ttk.Style(self.window)
         try:
             style.theme_use("clam")
@@ -124,7 +131,7 @@ class OrganizadorApp:
             background=[("active", PRIMARY_HOVER), ("pressed", PRIMARY_HOVER)],
         )
 
-    def _construir_layout(self):
+    def _construir_layout(self) -> None:
         container = ttk.Frame(self.window, style="App.TFrame", padding=24)
         container.pack(fill="both", expand=True)
 
@@ -156,7 +163,9 @@ class OrganizadorApp:
             state="readonly",
             width=10,
         )
-        self.combo_idioma.set(IDIOMAS_DISPONIVEIS.get(self.idioma, IDIOMAS_DISPONIVEIS[IDIOMA_PADRAO]))
+        self.combo_idioma.set(
+            IDIOMAS_DISPONIVEIS.get(self.idioma, IDIOMAS_DISPONIVEIS[IDIOMA_PADRAO])
+        )
         self.combo_idioma.bind("<<ComboboxSelected>>", self._ao_trocar_idioma_combobox)
         self.combo_idioma.pack(anchor="e", pady=(2, 0))
 
@@ -168,9 +177,9 @@ class OrganizadorApp:
         self.rotulo_pasta.pack(anchor="w")
         dir_frame = ttk.Frame(container, style="Card.TFrame")
         dir_frame.pack(fill="x", pady=(6, 16))
-        texto_diretorio_inicial = (
+        texto_diretorio_inicial: str = (
             self.ultimo_diretorio
-            if self._diretorio_selecionado
+            if self._diretorio_selecionado and self.ultimo_diretorio
             else self._t("pasta_nao_selecionada")
         )
         self.label_diretorio = ttk.Label(
@@ -268,7 +277,9 @@ class OrganizadorApp:
         self.botao_desfazer.pack(side="left", padx=(8, 0))
         self._atualizar_estado_botao_desfazer()
 
-        self.progress = ttk.Progressbar(container, orient="horizontal", mode="determinate")
+        self.progress = ttk.Progressbar(
+            container, orient="horizontal", mode="determinate"
+        )
         self.progress.pack(fill="x", pady=(0, 20))
 
         self.rotulo_resultado = ttk.Label(
@@ -290,19 +301,17 @@ class OrganizadorApp:
             padx=10,
             pady=10,
         )
-        scrollbar = ttk.Scrollbar(
-            resultado_frame, command=self.texto_resultado.yview
-        )
+        scrollbar = ttk.Scrollbar(resultado_frame, command=self.texto_resultado.yview)
         self.texto_resultado.configure(yscrollcommand=scrollbar.set)
         self.texto_resultado.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
         self._limpar_resultado(self._t("resultado_inicial"))
 
-    def _texto_check_monitorar(self):
+    def _texto_check_monitorar(self) -> str:
         return self._t("check_monitorar", intervalo=INTERVALO_MONITORAMENTO_MS // 1000)
 
-    def _texto_botao_atual(self):
+    def _texto_botao_atual(self) -> str:
         chave = {
             "padrao": "botao_organizar",
             "organizando": "botao_organizando",
@@ -310,26 +319,30 @@ class OrganizadorApp:
         }[self._estado_botao_organizar]
         return self._t(chave)
 
-    def _definir_estado_botao_organizar(self, estado):
+    def _definir_estado_botao_organizar(self, estado: str) -> None:
         self._estado_botao_organizar = estado
         self.botao_organizar.configure(text=self._texto_botao_atual())
 
-    def _ao_trocar_idioma_combobox(self, event=None):
+    def _ao_trocar_idioma_combobox(self, event: object = None) -> None:
         nome_selecionado = self.combo_idioma.get()
         codigo = next(
-            (cod for cod, nome in IDIOMAS_DISPONIVEIS.items() if nome == nome_selecionado),
+            (
+                cod
+                for cod, nome in IDIOMAS_DISPONIVEIS.items()
+                if nome == nome_selecionado
+            ),
             IDIOMA_PADRAO,
         )
         self._trocar_idioma(codigo)
 
-    def _trocar_idioma(self, codigo):
+    def _trocar_idioma(self, codigo: str) -> None:
         self.idioma = codigo
         config_atual = carregar_config()
         config_atual["idioma"] = codigo
         salvar_config(config_atual)
         self._atualizar_textos_estaticos()
 
-    def _atualizar_textos_estaticos(self):
+    def _atualizar_textos_estaticos(self) -> None:
         self.window.title(self._t("titulo_janela"))
         self.rotulo_titulo.configure(text=self._t("titulo_janela"))
         self.rotulo_subtitulo.configure(text=self._t("subtitulo"))
@@ -352,26 +365,28 @@ class OrganizadorApp:
         if self._resultado_mostrando_inicial:
             self._limpar_resultado(self._t("resultado_inicial"))
 
-    def _limpar_resultado(self, texto=""):
+    def _limpar_resultado(self, texto: str = "") -> None:
         self.texto_resultado.configure(state="normal")
         self.texto_resultado.delete("1.0", "end")
         if texto:
             self.texto_resultado.insert("1.0", texto)
         self.texto_resultado.configure(state="disabled")
 
-    def _adicionar_linha_resultado(self, linha):
+    def _adicionar_linha_resultado(self, linha: str) -> None:
         self._resultado_mostrando_inicial = False
         self.texto_resultado.configure(state="normal")
         self.texto_resultado.insert("end", linha + "\n")
         self.texto_resultado.see("end")
         self.texto_resultado.configure(state="disabled")
 
-    def _preparar_categorias_e_classificador(self, silencioso):
-        mapa_categorias = None
+    def _preparar_categorias_e_classificador(
+        self, silencioso: bool
+    ) -> tuple[MapaCategorias | None, ClassificadorCategoria | None]:
+        mapa_categorias: MapaCategorias | None = None
         if self.var_categorias.get() or self.var_ia.get():
             mapa_categorias = carregar_mapa_categorias(CAMINHO_CATEGORIAS)
 
-        classificador = None
+        classificador: ClassificadorCategoria | None = None
         if self.var_ia.get():
             if not organizer_ai.ollama_disponivel():
                 aviso = self._t("aviso_ollama_indisponivel")
@@ -380,9 +395,12 @@ class OrganizadorApp:
                 else:
                     messagebox.showwarning(self._t("titulo_organizador"), aviso)
             else:
+                assert mapa_categorias is not None
                 categorias_disponiveis = sorted(set(mapa_categorias.values()))
 
-                def classificador(nome_arquivo, caminho_arquivo, extensao):
+                def classificador(
+                    nome_arquivo: str, caminho_arquivo: str, extensao: str
+                ) -> str | None:
                     return organizer_ai.classificar_arquivo(
                         nome_arquivo,
                         caminho_arquivo,
@@ -392,13 +410,11 @@ class OrganizadorApp:
 
         return mapa_categorias, classificador
 
-    def _atualizar_estado_botao_desfazer(self):
+    def _atualizar_estado_botao_desfazer(self) -> None:
         tem_historico = bool(organizer_history.carregar_historico())
-        self.botao_desfazer.configure(
-            state="normal" if tem_historico else "disabled"
-        )
+        self.botao_desfazer.configure(state="normal" if tem_historico else "disabled")
 
-    def _desfazer_ultima_organizacao(self):
+    def _desfazer_ultima_organizacao(self) -> None:
         try:
             stats = organizer_history.desfazer_ultima_operacao()
         except ValueError as exc:
@@ -425,11 +441,11 @@ class OrganizadorApp:
 
         self._atualizar_estado_botao_desfazer()
 
-    def _ao_alternar_checkbox_monitorar(self):
+    def _ao_alternar_checkbox_monitorar(self) -> None:
         if not self.var_monitorar.get() and self.monitorando:
             self._parar_monitoramento()
 
-    def _selecionar_e_organizar(self):
+    def _selecionar_e_organizar(self) -> None:
         if self.monitorando:
             self._parar_monitoramento()
             return
@@ -449,7 +465,7 @@ class OrganizadorApp:
         else:
             self._organizar_diretorio(diretorio, silencioso=False)
 
-    def _iniciar_monitoramento(self, diretorio):
+    def _iniciar_monitoramento(self, diretorio: str) -> None:
         self.monitorando = True
         self._definir_estado_botao_organizar("parar_monitoramento")
         self._limpar_resultado()
@@ -462,7 +478,7 @@ class OrganizadorApp:
         )
         self._executar_ciclo_monitoramento(diretorio)
 
-    def _executar_ciclo_monitoramento(self, diretorio):
+    def _executar_ciclo_monitoramento(self, diretorio: str) -> None:
         if not self.monitorando:
             return
         self._organizar_diretorio(diretorio, silencioso=True)
@@ -471,7 +487,7 @@ class OrganizadorApp:
             lambda: self._executar_ciclo_monitoramento(diretorio),
         )
 
-    def _parar_monitoramento(self):
+    def _parar_monitoramento(self) -> None:
         self.monitorando = False
         if self._id_agendamento_monitoramento is not None:
             self.window.after_cancel(self._id_agendamento_monitoramento)
@@ -479,9 +495,9 @@ class OrganizadorApp:
         self._definir_estado_botao_organizar("padrao")
         self._adicionar_linha_resultado(self._t("monitoramento_interrompido"))
 
-    def _organizar_diretorio(self, diretorio, silencioso):
+    def _organizar_diretorio(self, diretorio: str, silencioso: bool) -> None:
         ano_texto = self.entry_ano.get().strip()
-        ano_minimo = None
+        ano_minimo: int | None = None
         if ano_texto:
             try:
                 ano_minimo = int(ano_texto)
@@ -525,11 +541,15 @@ class OrganizadorApp:
         self.progress.configure(value=0, maximum=1)
         self.window.update_idletasks()
 
-        verbo = (
-            self._t("verbo_seria_movido") if simular else self._t("verbo_movido")
-        )
+        verbo = self._t("verbo_seria_movido") if simular else self._t("verbo_movido")
 
-        def registrar_progresso(indice, total, nome_arquivo, status, pasta_destino):
+        def registrar_progresso(
+            indice: int,
+            total: int,
+            nome_arquivo: str,
+            status: str,
+            pasta_destino: str | None,
+        ) -> None:
             self.progress.configure(maximum=total, value=indice)
             descricao = {
                 "movido": self._t("status_movido", verbo=verbo, pasta=pasta_destino),
@@ -572,7 +592,9 @@ class OrganizadorApp:
         self._atualizar_estado_botao_desfazer()
         self._mostrar_resultado(stats, simular, silencioso)
 
-    def _mostrar_resultado(self, stats, simular, silencioso=False):
+    def _mostrar_resultado(
+        self, stats: dict[str, Any], simular: bool, silencioso: bool = False
+    ) -> None:
         if (
             stats["movidos"] == stats["duplicados"] == stats["ignorados"] == 0
             and not stats["erros"]
@@ -613,12 +635,10 @@ class OrganizadorApp:
                 self._t("titulo_organizador"), self._t("info_simulacao")
             )
         else:
-            messagebox.showinfo(
-                self._t("titulo_organizador"), self._t("info_sucesso")
-            )
+            messagebox.showinfo(self._t("titulo_organizador"), self._t("info_sucesso"))
 
 
-def main():
+def main() -> None:
     window = tk.Tk()
     OrganizadorApp(window)
     window.mainloop()

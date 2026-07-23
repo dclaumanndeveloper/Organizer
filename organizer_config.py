@@ -1,16 +1,19 @@
+from __future__ import annotations
+
 import json
 import os
+from typing import Any
 
 NOME_ARQUIVO_CONFIG = "config.json"
 
 
-def caminho_config_padrao():
+def caminho_config_padrao() -> str:
     return os.path.join(
         os.path.expanduser("~"), ".organizador_arquivos", NOME_ARQUIVO_CONFIG
     )
 
 
-def carregar_config(caminho=None):
+def carregar_config(caminho: str | None = None) -> dict[str, Any]:
     """Carrega as últimas opções usadas (pasta, ano, checkboxes).
 
     Retorna um dicionário vazio se o arquivo não existir ou estiver
@@ -21,14 +24,14 @@ def carregar_config(caminho=None):
     if not os.path.exists(caminho):
         return {}
     try:
-        with open(caminho, "r", encoding="utf-8") as arquivo:
+        with open(caminho, encoding="utf-8") as arquivo:
             conteudo = json.load(arquivo)
     except (OSError, ValueError):
         return {}
     return conteudo if isinstance(conteudo, dict) else {}
 
 
-def salvar_config(config, caminho=None):
+def salvar_config(config: dict[str, Any], caminho: str | None = None) -> None:
     caminho = caminho or caminho_config_padrao()
     pasta = os.path.dirname(caminho)
     if pasta:

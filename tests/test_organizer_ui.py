@@ -1,5 +1,5 @@
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -64,7 +64,10 @@ def test_organizar_atualiza_progresso_e_resultado(app, tmp_path):
     _criar_arquivo(pasta, "foto.jpg")
     _criar_arquivo(pasta, "relatorio.pdf")
 
-    with patch("organizer.filedialog") as mock_fd, patch("organizer.messagebox") as mock_msgbox:
+    with (
+        patch("organizer.filedialog") as mock_fd,
+        patch("organizer.messagebox") as mock_msgbox,
+    ):
         mock_fd.askdirectory.return_value = str(pasta)
         app._selecionar_e_organizar()
 
@@ -95,7 +98,10 @@ def test_ano_invalido_mostra_erro(app, tmp_path):
     pasta.mkdir()
     _criar_arquivo(pasta, "foto.jpg")
 
-    with patch("organizer.filedialog") as mock_fd, patch("organizer.messagebox") as mock_msgbox:
+    with (
+        patch("organizer.filedialog") as mock_fd,
+        patch("organizer.messagebox") as mock_msgbox,
+    ):
         mock_fd.askdirectory.return_value = str(pasta)
         app.entry_ano.delete(0, "end")
         app.entry_ano.insert(0, "nao-e-um-ano")
@@ -150,9 +156,7 @@ def test_regras_personalizadas_tem_prioridade(app, tmp_path, monkeypatch):
     _criar_arquivo(pasta, "fatura_junho.pdf")
 
     caminho_regras = tmp_path / "regras.json"
-    caminho_regras.write_text(
-        '[{"padrao": "(?i)fatura", "categoria": "financeiro"}]'
-    )
+    caminho_regras.write_text('[{"padrao": "(?i)fatura", "categoria": "financeiro"}]')
     monkeypatch.setattr("organizer.CAMINHO_REGRAS", str(caminho_regras))
 
     with patch("organizer.filedialog") as mock_fd, patch("organizer.messagebox"):
@@ -223,7 +227,10 @@ def test_ciclo_de_monitoramento_silencioso_nao_abre_messagebox(app, tmp_path):
     pasta.mkdir()
     _criar_arquivo(pasta, "foto.jpg")
 
-    with patch("organizer.filedialog") as mock_fd, patch("organizer.messagebox") as mock_msgbox:
+    with (
+        patch("organizer.filedialog") as mock_fd,
+        patch("organizer.messagebox") as mock_msgbox,
+    ):
         mock_fd.askdirectory.return_value = str(pasta)
         app.var_monitorar.set(True)
         app._selecionar_e_organizar()

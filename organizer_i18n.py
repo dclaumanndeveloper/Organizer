@@ -1,8 +1,12 @@
+from __future__ import annotations
+
+from typing import Any
+
 IDIOMA_PADRAO = "pt"
 
 IDIOMAS_DISPONIVEIS = {"pt": "Português", "en": "English", "es": "Español"}
 
-_TEXTOS = {
+_TEXTOS: dict[str, dict[str, str]] = {
     "titulo_janela": {
         "pt": "Organizador de Arquivos",
         "en": "File Organizer",
@@ -116,7 +120,11 @@ _TEXTOS = {
         "en": "Cycle skipped: {mensagem}",
         "es": "Ciclo omitido: {mensagem}",
     },
-    "erro_generico": {"pt": "Erro: {erro}", "en": "Error: {erro}", "es": "Error: {erro}"},
+    "erro_generico": {
+        "pt": "Erro: {erro}",
+        "en": "Error: {erro}",
+        "es": "Error: {erro}",
+    },
     "status_movido": {
         "pt": "{verbo} para {pasta}/",
         "en": "{verbo} to {pasta}/",
@@ -228,7 +236,7 @@ _TEXTOS = {
 }
 
 
-def t(idioma, chave, **kwargs):
+def t(idioma: str, chave: str, **kwargs: Any) -> str:
     """Traduz `chave` para `idioma`, com fallback para IDIOMA_PADRAO.
 
     Se a chave não existir, devolve a própria chave (nunca lança exceção -
