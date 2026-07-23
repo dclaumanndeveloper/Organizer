@@ -161,3 +161,75 @@ def test_regras_personalizadas_tem_prioridade(app, tmp_path, monkeypatch):
         app._selecionar_e_organizar()
 
     assert os.listdir(pasta / "financeiro") == ["fatura_junho.pdf"]
+
+
+def test_iniciar_monitoramento_organiza_na_hora_e_agenda_proximo_ciclo(app, tmp_path):
+    pasta = tmp_path / "arquivos"
+    pasta.mkdir()
+    _criar_arquivo(pasta, "foto.jpg")
+
+    with patch("organizer.filedialog") as mock_fd, patch("organizer.messagebox"):
+        mock_fd.askdirectory.return_value = str(pasta)
+        app.var_monitorar.set(True)
+        app._selecionar_e_organizar()
+
+    assert app.monitorando is True
+    assert app._id_agendamento_monitoramento is not None
+    assert app.botao_organizar.cget("text") == "Parar monitoramento"
+    assert os.listdir(pasta) == ["jpg"]
+
+    app._parar_monitoramento()
+
+
+def test_clicar_botao_durante_monitoramento_para_sem_reabrir_dialogo(app, tmp_path):
+    pasta = tmp_path / "arquivos"
+    pasta.mkdir()
+    _criar_arquivo(pasta, "foto.jpg")
+
+    with patch("organizer.filedialog") as mock_fd, patch("organizer.messagebox"):
+        mock_fd.askdirectory.return_value = str(pasta)
+        app.var_monitorar.set(True)
+        app._selecionar_e_organizar()
+
+        mock_fd.reset_mock()
+        app._selecionar_e_organizar()
+
+        assert not mock_fd.askdirectory.called
+
+    assert app.monitorando is False
+    assert app._id_agendamento_monitoramento is None
+    assert app.botao_organizar.cget("text") == "Selecionar pasta e organizar"
+
+
+def test_desmarcar_checkbox_monitorar_para_monitoramento_ativo(app, tmp_path):
+    pasta = tmp_path / "arquivos"
+    pasta.mkdir()
+    _criar_arquivo(pasta, "foto.jpg")
+
+    with patch("organizer.filedialog") as mock_fd, patch("organizer.messagebox"):
+        mock_fd.askdirectory.return_value = str(pasta)
+        app.var_monitorar.set(True)
+        app._selecionar_e_organizar()
+
+    app.var_monitorar.set(False)
+    app._ao_alternar_checkbox_monitorar()
+
+    assert app.monitorando is False
+    assert app._id_agendamento_monitoramento is None
+
+
+def test_ciclo_de_monitoramento_silencioso_nao_abre_messagebox(app, tmp_path):
+    pasta = tmp_path / "arquivos"
+    pasta.mkdir()
+    _criar_arquivo(pasta, "foto.jpg")
+
+    with patch("organizer.filedialog") as mock_fd, patch("organizer.messagebox") as mock_msgbox:
+        mock_fd.askdirectory.return_value = str(pasta)
+        app.var_monitorar.set(True)
+        app._selecionar_e_organizar()
+
+        assert not mock_msgbox.showinfo.called
+        assert not mock_msgbox.showwarning.called
+        assert not mock_msgbox.showerror.called
+
+    app._parar_monitoramento()
