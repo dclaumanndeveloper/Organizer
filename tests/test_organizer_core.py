@@ -206,3 +206,69 @@ def test_classificador_categoria_com_erro_cai_para_extensao(tmp_path):
 
     assert stats["movidos"] == 1
     assert os.listdir(tmp_path / "pdf") == ["fatura.pdf"]
+
+
+def test_nao_recursivo_ignora_arquivos_em_subpastas(tmp_path):
+    _criar_arquivo(tmp_path, "a.txt")
+    subpasta = tmp_path / "sub"
+    subpasta.mkdir()
+    _criar_arquivo(subpasta, "b.txt")
+
+    stats = organizar_arquivos(str(tmp_path))
+
+    assert stats["movidos"] == 1
+    assert os.listdir(subpasta) == ["b.txt"]
+
+
+def test_recursivo_organiza_arquivos_em_subpastas(tmp_path):
+    _criar_arquivo(tmp_path, "a.txt")
+    subpasta = tmp_path / "sub"
+    subpasta.mkdir()
+    _criar_arquivo(subpasta, "b.txt")
+
+    stats = organizar_arquivos(str(tmp_path), recursivo=True)
+
+    assert stats["movidos"] == 2
+    assert os.listdir(tmp_path / "txt") == ["a.txt"]
+    assert os.listdir(subpasta / "txt") == ["b.txt"]
+
+
+def test_recursivo_nao_reprocessa_pasta_de_categoria_do_mesmo_run(tmp_path):
+    _criar_arquivo(tmp_path, "foto.jpg")
+    mapa = carregar_mapa_categorias()
+
+    stats = organizar_arquivos(str(tmp_path), mapa_categorias=mapa, recursivo=True)
+
+    assert stats["movidos"] == 1
+    assert os.listdir(tmp_path / "imagens") == ["foto.jpg"]
+    assert not os.path.exists(tmp_path / "imagens" / "imagens")
+
+
+def test_recursivo_no_segundo_run_nao_reorganiza_pasta_ja_criada(tmp_path):
+    _criar_arquivo(tmp_path, "foto.jpg")
+    mapa = carregar_mapa_categorias()
+
+    organizar_arquivos(str(tmp_path), mapa_categorias=mapa, recursivo=True)
+    stats_segundo_run = organizar_arquivos(
+        str(tmp_path), mapa_categorias=mapa, recursivo=True
+    )
+
+    assert stats_segundo_run["movidos"] == 0
+    assert os.listdir(tmp_path / "imagens") == ["foto.jpg"]
+
+
+def test_progresso_callback_usa_caminho_relativo_em_modo_recursivo(tmp_path):
+    subpasta = tmp_path / "sub"
+    subpasta.mkdir()
+    _criar_arquivo(subpasta, "nota.txt")
+    chamadas = []
+
+    organizar_arquivos(
+        str(tmp_path),
+        recursivo=True,
+        progresso_callback=lambda indice, total, nome, status, pasta: chamadas.append(
+            (nome, pasta)
+        ),
+    )
+
+    assert chamadas == [(os.path.join("sub", "nota.txt"), os.path.join("sub", "txt"))]

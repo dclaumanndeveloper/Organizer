@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 import organizer_ai
+from organizer_config import carregar_config, salvar_config
 from organizer_core import carregar_mapa_categorias, organizar_arquivos
 
 BG_COLOR = "#FAFBFF"
@@ -23,9 +24,13 @@ class OrganizadorApp:
 
     def __init__(self, window):
         self.window = window
-        self.var_simular = tk.BooleanVar(value=False)
-        self.var_categorias = tk.BooleanVar(value=False)
-        self.var_ia = tk.BooleanVar(value=False)
+        config = carregar_config()
+        self.ultimo_diretorio = config.get("ultimo_diretorio") or None
+        self._ano_inicial = config.get("ano_minimo", "")
+        self.var_simular = tk.BooleanVar(value=config.get("simular", False))
+        self.var_categorias = tk.BooleanVar(value=config.get("categorias", False))
+        self.var_ia = tk.BooleanVar(value=config.get("ia", False))
+        self.var_recursivo = tk.BooleanVar(value=config.get("recursivo", False))
 
         self._configurar_janela()
         self._configurar_estilos()
@@ -115,9 +120,12 @@ class OrganizadorApp:
         ).pack(anchor="w")
         dir_frame = ttk.Frame(container, style="Card.TFrame")
         dir_frame.pack(fill="x", pady=(6, 16))
+        texto_diretorio_inicial = "Nenhuma pasta selecionada ainda"
+        if self.ultimo_diretorio and os.path.isdir(self.ultimo_diretorio):
+            texto_diretorio_inicial = self.ultimo_diretorio
         self.label_diretorio = ttk.Label(
             dir_frame,
-            text="Nenhuma pasta selecionada ainda",
+            text=texto_diretorio_inicial,
             style="Directory.TLabel",
         )
         self.label_diretorio.pack(fill="x")
@@ -129,6 +137,8 @@ class OrganizadorApp:
         ).pack(anchor="w")
         self.entry_ano = ttk.Entry(container, font=("Segoe UI", 10))
         self.entry_ano.pack(fill="x", pady=(6, 4))
+        if self._ano_inicial:
+            self.entry_ano.insert(0, self._ano_inicial)
         ttk.Label(
             container,
             text="Arquivos modificados antes desse ano serão ignorados. "
@@ -155,6 +165,12 @@ class OrganizadorApp:
             opcoes_frame,
             text="Usar IA local (Ollama) para sugerir a categoria de cada arquivo",
             variable=self.var_ia,
+            style="Check.TCheckbutton",
+        ).pack(anchor="w")
+        ttk.Checkbutton(
+            opcoes_frame,
+            text="Organizar subpastas também (recursivo)",
+            variable=self.var_recursivo,
             style="Check.TCheckbutton",
         ).pack(anchor="w")
 
@@ -237,10 +253,13 @@ class OrganizadorApp:
         return mapa_categorias, classificador
 
     def _selecionar_e_organizar(self):
-        diretorio = filedialog.askdirectory()
+        diretorio = filedialog.askdirectory(
+            initialdir=self.ultimo_diretorio or os.path.expanduser("~")
+        )
         if not diretorio:
             return
 
+        self.ultimo_diretorio = diretorio
         self.label_diretorio.configure(text=diretorio)
 
         ano_texto = self.entry_ano.get().strip()
@@ -258,6 +277,18 @@ class OrganizadorApp:
 
         mapa_categorias, classificador = self._preparar_categorias_e_classificador()
         simular = self.var_simular.get()
+        recursivo = self.var_recursivo.get()
+
+        salvar_config(
+            {
+                "ultimo_diretorio": diretorio,
+                "ano_minimo": ano_texto,
+                "simular": simular,
+                "categorias": self.var_categorias.get(),
+                "ia": self.var_ia.get(),
+                "recursivo": recursivo,
+            }
+        )
 
         self.botao_organizar.configure(state="disabled", text="Organizando...")
         self.progress.configure(value=0, maximum=1)
@@ -285,6 +316,7 @@ class OrganizadorApp:
                 mapa_categorias=mapa_categorias,
                 classificador_categoria=classificador,
                 simular=simular,
+                recursivo=recursivo,
                 progresso_callback=registrar_progresso,
             )
         except NotADirectoryError as exc:

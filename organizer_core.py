@@ -69,12 +69,42 @@ def _destino_sem_colisao(caminho_destino, nomes_em_uso):
         contador += 1
 
 
+def _diretorios_a_processar(diretorio_raiz, recursivo, pastas_reservadas):
+    """Lista, de uma vez só, todas as pastas a organizar.
+
+    Feito num único snapshot ANTES de mover qualquer arquivo, para que as
+    pastas de destino criadas durante a organização (ex: "imagens",
+    "documentos") nunca entrem nessa lista e não sejam reprocessadas na
+    mesma execução.
+    """
+    if not recursivo:
+        return [diretorio_raiz]
+
+    diretorios = [diretorio_raiz]
+    pilha = [diretorio_raiz]
+    while pilha:
+        atual = pilha.pop()
+        try:
+            entradas = os.listdir(atual)
+        except OSError:
+            continue
+        for nome in entradas:
+            if nome in pastas_reservadas:
+                continue
+            caminho = os.path.join(atual, nome)
+            if os.path.isdir(caminho):
+                diretorios.append(caminho)
+                pilha.append(caminho)
+    return diretorios
+
+
 def organizar_arquivos(
     diretorio,
     ano_minimo=None,
     mapa_categorias=None,
     classificador_categoria=None,
     simular=False,
+    recursivo=False,
     progresso_callback=None,
 ):
     """Organiza os arquivos de `diretorio` em subpastas por extensão ou categoria.
@@ -93,9 +123,16 @@ def organizar_arquivos(
       função a nenhum provedor específico.
     - `simular`: se `True`, calcula o que seria feito sem mover nenhum
       arquivo nem criar pastas (modo de pré-visualização).
+    - `recursivo`: se `True`, organiza também os arquivos de subpastas
+      (cada subpasta ganha suas próprias pastas de destino, dentro dela
+      mesma). Pastas cujo nome coincida com uma categoria/`"sem_extensao"`
+      não são percorridas, para não reprocessar pastas de destino já
+      criadas em execuções anteriores.
     - `progresso_callback`: chamado a cada arquivo processado como
       `progresso_callback(indice, total, nome_arquivo, status, pasta_destino)`,
-      onde `status` é "movido", "ignorado" ou "erro".
+      onde `status` é "movido", "ignorado" ou "erro". `nome_arquivo` e
+      `pasta_destino` são relativos a `diretorio` (podem incluir subpastas
+      quando `recursivo=True`).
 
     Retorna um dicionário com as estatísticas da execução:
     {"movidos": int, "ignorados": int, "erros": [str, ...]}
@@ -105,56 +142,77 @@ def organizar_arquivos(
 
     stats = {"movidos": 0, "ignorados": 0, "erros": []}
 
-    nomes_arquivos = [
-        nome
-        for nome in os.listdir(diretorio)
-        if os.path.isfile(os.path.join(diretorio, nome))
-    ]
-    total = len(nomes_arquivos)
+    pastas_reservadas = set(mapa_categorias.values()) if mapa_categorias else set()
+    pastas_reservadas.add("sem_extensao")
+
+    diretorios = _diretorios_a_processar(diretorio, recursivo, pastas_reservadas)
+
+    arquivos_por_pasta = {}
+    total = 0
+    for pasta in diretorios:
+        nomes = [
+            nome
+            for nome in os.listdir(pasta)
+            if os.path.isfile(os.path.join(pasta, nome))
+        ]
+        arquivos_por_pasta[pasta] = nomes
+        total += len(nomes)
+
     destinos_reservados = set()
+    indice = 0
 
-    for indice, nome_arquivo in enumerate(nomes_arquivos, start=1):
-        caminho_origem = os.path.join(diretorio, nome_arquivo)
+    for pasta_atual in diretorios:
+        for nome_arquivo in arquivos_por_pasta[pasta_atual]:
+            indice += 1
+            caminho_origem = os.path.join(pasta_atual, nome_arquivo)
+            nome_exibicao = os.path.relpath(caminho_origem, diretorio)
 
-        if ano_minimo is not None:
-            try:
-                if _ano_modificacao(caminho_origem) < ano_minimo:
-                    stats["ignorados"] += 1
+            if ano_minimo is not None:
+                try:
+                    if _ano_modificacao(caminho_origem) < ano_minimo:
+                        stats["ignorados"] += 1
+                        if progresso_callback is not None:
+                            progresso_callback(
+                                indice, total, nome_exibicao, "ignorado", None
+                            )
+                        continue
+                except OSError as exc:
+                    stats["erros"].append(f"{nome_exibicao}: {exc}")
                     if progresso_callback is not None:
-                        progresso_callback(indice, total, nome_arquivo, "ignorado", None)
+                        progresso_callback(indice, total, nome_exibicao, "erro", None)
                     continue
-            except OSError as exc:
-                stats["erros"].append(f"{nome_arquivo}: {exc}")
-                if progresso_callback is not None:
-                    progresso_callback(indice, total, nome_arquivo, "erro", None)
-                continue
 
-        extensao = _extensao_arquivo(nome_arquivo)
-        categoria = None
-        if classificador_categoria is not None and extensao != "sem_extensao":
+            extensao = _extensao_arquivo(nome_arquivo)
+            categoria = None
+            if classificador_categoria is not None and extensao != "sem_extensao":
+                try:
+                    categoria = classificador_categoria(
+                        nome_arquivo, caminho_origem, extensao
+                    )
+                except Exception:
+                    categoria = None
+
+            pasta_destino_nome = categoria or _pasta_destino(extensao, mapa_categorias)
+            pasta_destino = os.path.join(pasta_atual, pasta_destino_nome)
+            status = "movido"
+
             try:
-                categoria = classificador_categoria(nome_arquivo, caminho_origem, extensao)
-            except Exception:
-                categoria = None
+                caminho_destino = _destino_sem_colisao(
+                    os.path.join(pasta_destino, nome_arquivo), destinos_reservados
+                )
+                destinos_reservados.add(caminho_destino)
+                if not simular:
+                    os.makedirs(pasta_destino, exist_ok=True)
+                    os.replace(caminho_origem, caminho_destino)
+                stats["movidos"] += 1
+            except OSError as exc:
+                stats["erros"].append(f"{nome_exibicao}: {exc}")
+                status = "erro"
 
-        pasta_destino_nome = categoria or _pasta_destino(extensao, mapa_categorias)
-        pasta_destino = os.path.join(diretorio, pasta_destino_nome)
-        status = "movido"
-
-        try:
-            caminho_destino = _destino_sem_colisao(
-                os.path.join(pasta_destino, nome_arquivo), destinos_reservados
-            )
-            destinos_reservados.add(caminho_destino)
-            if not simular:
-                os.makedirs(pasta_destino, exist_ok=True)
-                os.replace(caminho_origem, caminho_destino)
-            stats["movidos"] += 1
-        except OSError as exc:
-            stats["erros"].append(f"{nome_arquivo}: {exc}")
-            status = "erro"
-
-        if progresso_callback is not None:
-            progresso_callback(indice, total, nome_arquivo, status, pasta_destino_nome)
+            if progresso_callback is not None:
+                pasta_destino_exibicao = os.path.relpath(pasta_destino, diretorio)
+                progresso_callback(
+                    indice, total, nome_exibicao, status, pasta_destino_exibicao
+                )
 
     return stats
