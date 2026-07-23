@@ -1,3 +1,41 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "organizador-arquivos"
+version = "0.1.0"
+description = "Organizador de arquivos com interface gráfica (Tkinter): organiza arquivos por extensão, categoria ou regras personalizadas, com suporte opcional a IA local, duplicados, monitoramento contínuo e perfis salvos."
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+requires-python = ">=3.9"
+authors = [{ name = "dclaumanndeveloper" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: OS Independent",
+    "Environment :: X11 Applications",
+    "Topic :: Desktop Environment :: File Managers",
+    "Topic :: Utilities",
+]
+
+[project.urls]
+Homepage = "https://github.com/dclaumanndeveloper/Organizer"
+Repository = "https://github.com/dclaumanndeveloper/Organizer"
+
+[project.scripts]
+organizador-arquivos = "organizer:main"
+
+[tool.setuptools]
+py-modules = [
+    "organizer",
+    "organizer_core",
+    "organizer_config",
+    "organizer_history",
+    "organizer_ai",
+    "organizer_i18n",
+]
+
 [tool.black]
 line-length = 88
 target-version = ["py311"]

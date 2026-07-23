@@ -121,12 +121,31 @@ git push origin v1.0.0
 Isso dispara uma matrix de build (rodando os testes antes de empacotar, em cada plataforma) e cria uma *release* em modo rascunho no GitHub com os artefatos anexados:
 
 - `organizador-linux`: executável único (`--onefile`).
+- `organizador-linux.AppImage`: pacote portátil (basta dar permissão de execução e rodar, sem instalar nada).
+- `organizador-linux.deb`: pacote Debian/Ubuntu (`sudo dpkg -i organizador-linux.deb`) que instala o executável em `/usr/bin/organizador`.
 - `organizador-windows.exe`: executável único (`--onefile`).
+- `organizador-windows-installer.exe`: instalador NSIS que copia o programa para `Program Files`, cria um atalho no menu iniciar e um desinstalador.
 - `organizador-macos.zip`: bundle `.app` de verdade (gerado sem `--onefile`, para que o Finder o reconheça como um aplicativo), compactado com `ditto` (preserva metadados do macOS melhor que `zip`).
+- `organizador-macos.dmg`: imagem de disco (`.dmg`) contendo o mesmo bundle `.app`, no formato que usuários de Mac esperam para instalar aplicativos.
 
 A release fica em rascunho, pronta para revisão e publicação manual.
 
-**Nota sobre assinatura de código**: nenhum dos artefatos é assinado digitalmente (não há certificado de desenvolvedor configurado). Isso significa que o Windows Defender SmartScreen e o Gatekeeper do macOS provavelmente vão avisar que o app é de "desenvolvedor desconhecido" no primeiro uso — no macOS, é necessário clicar com o botão direito no `.app` e escolher "Abrir" (em vez de dar duplo-clique) para contornar isso. Instaladores nativos completos (NSIS/Inno Setup no Windows, `.deb`/AppImage no Linux) e assinatura de código ainda não foram implementados — ficam como possíveis melhorias futuras.
+**Nota sobre assinatura de código**: nenhum dos artefatos é assinado digitalmente (não há certificado de desenvolvedor configurado, nem para Windows Authenticode nem para notarização da Apple — ambos exigem uma conta paga que só o dono do projeto pode obter). Isso significa que o Windows Defender SmartScreen e o Gatekeeper do macOS provavelmente vão avisar que o app é de "desenvolvedor desconhecido" no primeiro uso — no macOS, é necessário clicar com o botão direito no `.app` (ou no `.dmg` montado) e escolher "Abrir" (em vez de dar duplo-clique) para contornar isso. O AppImage e o `.deb` também não são assinados (GPG), o que é comum para builds automatizados sem uma infraestrutura de assinatura própria.
+
+## Empacotando para o PyPI
+
+O projeto também tem metadados de empacotamento padrão (`[project]` em `pyproject.toml`, usando `setuptools` como build backend), então dá para gerar um pacote instalável via `pip` sem depender do PyInstaller:
+
+```bash
+pip install build
+python -m build
+```
+
+Isso gera `dist/organizador_arquivos-<versão>.tar.gz` (sdist) e `dist/organizador_arquivos-<versão>-py3-none-any.whl` (wheel). Instalar o wheel expõe um comando `organizador-arquivos` no PATH (via `[project.scripts]`), que executa `organizer:main()`.
+
+O CI (`.github/workflows/test.yml`, job `build-package`) já valida que o pacote é gerado corretamente e passa em `twine check` a cada push/PR.
+
+**Sobre publicação real no PyPI**: existe um workflow pronto (`.github/workflows/publish.yml`), disparado ao publicar uma release do GitHub ou manualmente pela aba Actions, que builda o pacote e o publica via [trusted publishing](https://docs.pypi.org/trusted-publishers/) (OIDC, sem precisar guardar um token de API como secret). Esse workflow **não publica nada sozinho**: antes de usá-lo de verdade, o dono do projeto precisa criar o pacote `organizador-arquivos` no PyPI e configurá-lo como *trusted publisher* apontando para este repositório/workflow/ambiente (`pypi`) — isso só pode ser feito por quem tem uma conta no PyPI, então não foi (e não pôde ser) executado aqui.
 
 ## Como Rodar os Testes
 
