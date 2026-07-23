@@ -15,9 +15,10 @@ O código é dividido em módulos para separar a lógica de negócio da interfac
 -   **`organizer.py`**: monta a interface gráfica (Tkinter), lê as opções escolhidas pelo usuário e chama `organizer_core.organizar_arquivos`. É o ponto de entrada da aplicação.
 -   **`organizer_config.py`**: carrega/salva o último perfil de uso (pasta, ano, checkboxes) em `~/.organizador_arquivos/config.json`, para que a interface abra já preenchida com as últimas opções usadas.
 -   **`organizer_history.py`**: registra cada organização (lista de origem/destino de cada arquivo movido) em `~/.organizador_arquivos/historico.json` e sabe desfazer a última execução, movendo os arquivos de volta. Assim como `organizer_ai.py`, não é acoplado ao núcleo — `organizer_core.organizar_arquivos` apenas devolve a lista de movimentos em `stats["movimentos"]`.
+-   **`organizer_i18n.py`**: dicionário de traduções (Português, English, Español) e a função `t(idioma, chave, **kwargs)` usada por toda a interface. Nenhuma lógica de UI aqui — só texto.
 -   **`categorias.json`**: mapa de categorias (`{"categoria": ["ext1", "ext2", ...]}`) usado quando o agrupamento por categoria está ativado. Editável pelo usuário para customizar as categorias.
 -   **`regras.json`**: lista de regras de categorização por nome de arquivo (regex), usada quando "Usar regras personalizadas" está ativado. Vazia (`[]`) por padrão — editável pelo usuário.
--   **`tests/`**: testes automatizados (`pytest`) cobrindo `organizer_core.py`, `organizer_config.py`, `organizer_history.py` e `organizer_ai.py` (este último com o Ollama mockado, sem precisar de um servidor real rodando), além da UI (`organizer.py`) em `tests/test_organizer_ui.py`.
+-   **`tests/`**: testes automatizados (`pytest`) cobrindo `organizer_core.py`, `organizer_config.py`, `organizer_history.py`, `organizer_i18n.py` e `organizer_ai.py` (este último com o Ollama mockado, sem precisar de um servidor real rodando), além da UI (`organizer.py`) em `tests/test_organizer_ui.py`.
 
 ## Bibliotecas Utilizadas
 
@@ -48,6 +49,7 @@ Para rodar os testes automatizados ou empacotar a aplicação como executável �
 13. **Detecção de Duplicados** (opcional): ao marcar "Detectar arquivos duplicados", cada arquivo tem seu hash (SHA-256) calculado; se o conteúdo já foi visto nesta mesma execução, o arquivo vai para uma pasta `duplicados` em vez de sua categoria normal. Arquivos duplicados nunca são apagados, só isolados para revisão manual.
 14. **Regras Personalizadas por Nome** (opcional): ao marcar "Usar regras personalizadas", cada arquivo é testado contra os padrões (regex) definidos em `regras.json`; o primeiro padrão que der match define a categoria do arquivo, com prioridade sobre a categoria por extensão e sobre a sugestão da IA.
 15. **Monitoramento Contínuo** (opcional): ao marcar "Monitorar a pasta continuamente" e clicar no botão, a pasta escolhida é organizada imediatamente e depois, a cada 30 segundos, o organizador roda de novo automaticamente nela (com as mesmas opções), pegando arquivos novos sem precisar clicar de novo. Nenhuma caixa de mensagem aparece durante os ciclos automáticos (só o log é atualizado), para não interromper o uso do computador repetidamente. O botão vira "Parar monitoramento" enquanto ativo; clicar nele de novo (ou desmarcar a caixa) interrompe.
+16. **Interface em Português, English ou Español**: um seletor de idioma no topo da janela troca todos os textos da interface na hora (título, botões, checkboxes, mensagens de resultado), sem precisar reiniciar o programa. A escolha é lembrada entre execuções, em `~/.organizador_arquivos/config.json`. Português é o idioma padrão.
 
 ## Como Executar o Script
 
