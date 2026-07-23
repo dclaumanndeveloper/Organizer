@@ -1,10 +1,21 @@
+from __future__ import annotations
+
 import hashlib
 import json
 import os
 import re
+from collections.abc import Callable
 from datetime import datetime
+from re import Pattern
+from typing import Any
 
-CATEGORIAS_PADRAO = {
+CategoriasPorGrupo = dict[str, list[str]]
+MapaCategorias = dict[str, str]
+Regra = tuple[Pattern[str], str]
+ClassificadorCategoria = Callable[[str, str, str], "str | None"]
+ProgressoCallback = Callable[[int, int, str, str, "str | None"], None]
+
+CATEGORIAS_PADRAO: CategoriasPorGrupo = {
     "imagens": ["jpg", "jpeg", "png", "gif", "bmp", "svg", "webp", "tiff", "ico"],
     "documentos": ["pdf", "doc", "docx", "odt", "txt", "rtf", "md"],
     "planilhas": ["xls", "xlsx", "ods", "csv"],
@@ -15,16 +26,16 @@ CATEGORIAS_PADRAO = {
 }
 
 
-def expandir_categorias(categorias_por_grupo):
+def expandir_categorias(categorias_por_grupo: CategoriasPorGrupo) -> MapaCategorias:
     """Converte {"categoria": [extensoes]} em {extensao: "categoria"}."""
-    mapa = {}
+    mapa: MapaCategorias = {}
     for categoria, extensoes in categorias_por_grupo.items():
         for extensao in extensoes:
             mapa[extensao.lower()] = categoria
     return mapa
 
 
-def carregar_mapa_categorias(caminho_config=None):
+def carregar_mapa_categorias(caminho_config: str | None = None) -> MapaCategorias:
     """Carrega um mapa extensao->categoria de um arquivo JSON.
 
     Se `caminho_config` for informado e existir, o JSON deve ter o formato
@@ -39,7 +50,7 @@ def carregar_mapa_categorias(caminho_config=None):
     return expandir_categorias(categorias_por_grupo)
 
 
-def carregar_regras(caminho_config=None):
+def carregar_regras(caminho_config: str | None = None) -> list[Regra]:
     """Carrega regras de categorização por nome de arquivo, de um JSON.
 
     Formato do arquivo: uma lista de objetos
@@ -55,14 +66,14 @@ def carregar_regras(caminho_config=None):
     return [(re.compile(item["padrao"]), item["categoria"]) for item in bruto]
 
 
-def _categoria_por_regra(nome_arquivo, regras):
+def _categoria_por_regra(nome_arquivo: str, regras: list[Regra]) -> str | None:
     for padrao, categoria in regras:
         if padrao.search(nome_arquivo):
             return categoria
     return None
 
 
-def _hash_arquivo(caminho_arquivo, tamanho_bloco=65536):
+def _hash_arquivo(caminho_arquivo: str, tamanho_bloco: int = 65536) -> str:
     hasher = hashlib.sha256()
     with open(caminho_arquivo, "rb") as arquivo:
         for bloco in iter(lambda: arquivo.read(tamanho_bloco), b""):
@@ -70,25 +81,25 @@ def _hash_arquivo(caminho_arquivo, tamanho_bloco=65536):
     return hasher.hexdigest()
 
 
-def _extensao_arquivo(nome_arquivo):
+def _extensao_arquivo(nome_arquivo: str) -> str:
     base = os.path.basename(nome_arquivo)
     if base.startswith(".") or "." not in base.lstrip("."):
         return "sem_extensao"
     return base.rsplit(".", 1)[-1].lower()
 
 
-def _pasta_destino(extensao, mapa_categorias):
+def _pasta_destino(extensao: str, mapa_categorias: MapaCategorias | None) -> str:
     if extensao == "sem_extensao" or not mapa_categorias:
         return extensao
     return mapa_categorias.get(extensao, extensao)
 
 
-def _ano_modificacao(caminho_arquivo):
+def _ano_modificacao(caminho_arquivo: str) -> int:
     timestamp = os.path.getmtime(caminho_arquivo)
     return datetime.fromtimestamp(timestamp).year
 
 
-def _destino_sem_colisao(caminho_destino, nomes_em_uso):
+def _destino_sem_colisao(caminho_destino: str, nomes_em_uso: set[str]) -> str:
     if caminho_destino not in nomes_em_uso and not os.path.exists(caminho_destino):
         return caminho_destino
 
@@ -102,7 +113,9 @@ def _destino_sem_colisao(caminho_destino, nomes_em_uso):
         contador += 1
 
 
-def _diretorios_a_processar(diretorio_raiz, recursivo, pastas_reservadas):
+def _diretorios_a_processar(
+    diretorio_raiz: str, recursivo: bool, pastas_reservadas: set[str]
+) -> list[str]:
     """Lista, de uma vez só, todas as pastas a organizar.
 
     Feito num único snapshot ANTES de mover qualquer arquivo, para que as
@@ -132,16 +145,16 @@ def _diretorios_a_processar(diretorio_raiz, recursivo, pastas_reservadas):
 
 
 def organizar_arquivos(
-    diretorio,
-    ano_minimo=None,
-    mapa_categorias=None,
-    classificador_categoria=None,
-    regras=None,
-    detectar_duplicados=False,
-    simular=False,
-    recursivo=False,
-    progresso_callback=None,
-):
+    diretorio: str,
+    ano_minimo: int | None = None,
+    mapa_categorias: MapaCategorias | None = None,
+    classificador_categoria: ClassificadorCategoria | None = None,
+    regras: list[Regra] | None = None,
+    detectar_duplicados: bool = False,
+    simular: bool = False,
+    recursivo: bool = False,
+    progresso_callback: ProgressoCallback | None = None,
+) -> dict[str, Any]:
     """Organiza os arquivos de `diretorio` em subpastas por extensão ou categoria.
 
     - `ano_minimo`: se informado, arquivos modificados antes desse ano são
@@ -185,7 +198,7 @@ def organizar_arquivos(
     if not diretorio or not os.path.isdir(diretorio):
         raise NotADirectoryError(f"Diretório inválido: {diretorio!r}")
 
-    stats = {
+    stats: dict[str, Any] = {
         "movidos": 0,
         "duplicados": 0,
         "ignorados": 0,
@@ -199,7 +212,7 @@ def organizar_arquivos(
 
     diretorios = _diretorios_a_processar(diretorio, recursivo, pastas_reservadas)
 
-    arquivos_por_pasta = {}
+    arquivos_por_pasta: dict[str, list[str]] = {}
     total = 0
     for pasta in diretorios:
         nomes = [
@@ -210,8 +223,8 @@ def organizar_arquivos(
         arquivos_por_pasta[pasta] = nomes
         total += len(nomes)
 
-    destinos_reservados = set()
-    hashes_vistos = {} if detectar_duplicados else None
+    destinos_reservados: set[str] = set()
+    hashes_vistos: dict[str, str] | None = {} if detectar_duplicados else None
     indice = 0
 
     for pasta_atual in diretorios:
@@ -236,7 +249,7 @@ def organizar_arquivos(
                     continue
 
             eh_duplicado = False
-            if detectar_duplicados:
+            if detectar_duplicados and hashes_vistos is not None:
                 try:
                     hash_arquivo = _hash_arquivo(caminho_origem)
                 except OSError as exc:

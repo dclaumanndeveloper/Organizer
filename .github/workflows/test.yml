@@ -23,6 +23,9 @@ jobs:
     - name: Black (formatação)
       run: black --check .
 
+    - name: Mypy (checagem de tipos)
+      run: mypy .
+
   test:
     strategy:
       fail-fast: false

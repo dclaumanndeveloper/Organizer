@@ -1,17 +1,23 @@
+from __future__ import annotations
+
 import json
 import os
 import time
+from typing import Any
+
+Movimento = dict[str, str]
+Execucao = dict[str, Any]
 
 NOME_ARQUIVO_HISTORICO = "historico.json"
 
 
-def caminho_historico_padrao():
+def caminho_historico_padrao() -> str:
     return os.path.join(
         os.path.expanduser("~"), ".organizador_arquivos", NOME_ARQUIVO_HISTORICO
     )
 
 
-def carregar_historico(caminho=None):
+def carregar_historico(caminho: str | None = None) -> list[Execucao]:
     """Carrega a lista de execuções registradas (mais antiga primeiro).
 
     Retorna uma lista vazia se o arquivo não existir ou estiver
@@ -28,7 +34,7 @@ def carregar_historico(caminho=None):
     return conteudo if isinstance(conteudo, list) else []
 
 
-def _salvar_historico(historico, caminho):
+def _salvar_historico(historico: list[Execucao], caminho: str) -> None:
     pasta = os.path.dirname(caminho)
     if pasta:
         os.makedirs(pasta, exist_ok=True)
@@ -36,7 +42,7 @@ def _salvar_historico(historico, caminho):
         json.dump(historico, arquivo, indent=2, ensure_ascii=False)
 
 
-def registrar_operacao(movimentos, caminho=None):
+def registrar_operacao(movimentos: list[Movimento], caminho: str | None = None) -> None:
     """Registra uma nova execução no histórico.
 
     `movimentos` é a lista de {"origem": ..., "destino": ...} retornada por
@@ -52,7 +58,7 @@ def registrar_operacao(movimentos, caminho=None):
     _salvar_historico(historico, caminho)
 
 
-def desfazer_ultima_operacao(caminho=None):
+def desfazer_ultima_operacao(caminho: str | None = None) -> dict[str, Any]:
     """Reverte a última execução registrada, movendo os arquivos de volta.
 
     A entrada é removida do histórico mesmo que alguns arquivos não possam
@@ -68,7 +74,7 @@ def desfazer_ultima_operacao(caminho=None):
         raise ValueError("Não há nenhuma organização registrada para desfazer.")
 
     ultima_execucao = historico.pop()
-    stats = {"revertidos": 0, "erros": []}
+    stats: dict[str, Any] = {"revertidos": 0, "erros": []}
 
     for movimento in reversed(ultima_execucao["movimentos"]):
         origem = movimento["origem"]

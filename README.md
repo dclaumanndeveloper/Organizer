@@ -140,9 +140,9 @@ Os testes de UI usam `pytest.importorskip("tkinter")` — se o `tkinter` não es
 
 Os testes também rodam automaticamente via GitHub Actions a cada `push`/`pull request`, em Linux, Windows e macOS (matrix de CI em `.github/workflows/test.yml`) — já que esta é uma aplicação desktop distribuída para as três plataformas. No job Linux, o CI instala `xvfb` e `python3-tk` e roda a suíte com `xvfb-run` (display virtual), garantindo que os testes de UI também rodem de verdade lá, não só sejam pulados.
 
-## Qualidade de Código (lint e formatação)
+## Qualidade de Código (lint, formatação e tipos)
 
-O projeto usa [`ruff`](https://docs.astral.sh/ruff/) (lint) e [`black`](https://black.readthedocs.io/) (formatação), configurados em `pyproject.toml`. Um job `lint` separado no CI (`.github/workflows/test.yml`) roda os dois a cada `push`/`pull request`.
+O projeto usa [`ruff`](https://docs.astral.sh/ruff/) (lint), [`black`](https://black.readthedocs.io/) (formatação) e [`mypy`](https://mypy-lang.org/) (checagem estática de tipos), configurados em `pyproject.toml`. Um job `lint` separado no CI (`.github/workflows/test.yml`) roda os três a cada `push`/`pull request`. `mypy` checa todos os módulos `organizer_*.py`/`organizer.py` (não os testes, que usam mocks extensivamente e gerariam ruído).
 
 Para rodar localmente antes de commitar:
 
@@ -150,6 +150,7 @@ Para rodar localmente antes de commitar:
 pip install -r requirements-dev.txt
 ruff check .
 black --check .   # ou "black ." para formatar automaticamente
+mypy .
 ```
 
 ## Licença

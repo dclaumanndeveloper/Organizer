@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import json
 import urllib.error
 import urllib.request
+from collections.abc import Sequence
 
 HOST_PADRAO = "http://localhost:11434"
 MODELO_PADRAO = "llama3.2"
@@ -10,7 +13,7 @@ EXTENSOES_TEXTO = {"txt", "md", "csv", "log", "json", "py", "js", "yml", "yaml"}
 TAMANHO_TRECHO = 500
 
 
-def ollama_disponivel(host=HOST_PADRAO, timeout=TIMEOUT_PADRAO):
+def ollama_disponivel(host: str = HOST_PADRAO, timeout: int = TIMEOUT_PADRAO) -> bool:
     """Verifica se um servidor Ollama está acessível em `host`."""
     try:
         with urllib.request.urlopen(f"{host}/api/tags", timeout=timeout):
@@ -19,7 +22,7 @@ def ollama_disponivel(host=HOST_PADRAO, timeout=TIMEOUT_PADRAO):
         return False
 
 
-def _trecho_conteudo(caminho_arquivo, extensao):
+def _trecho_conteudo(caminho_arquivo: str, extensao: str) -> str:
     if extensao not in EXTENSOES_TEXTO:
         return ""
     try:
@@ -30,14 +33,14 @@ def _trecho_conteudo(caminho_arquivo, extensao):
 
 
 def classificar_arquivo(
-    nome_arquivo,
-    caminho_arquivo,
-    extensao,
-    categorias_disponiveis,
-    host=HOST_PADRAO,
-    modelo=MODELO_PADRAO,
-    timeout=TIMEOUT_PADRAO,
-):
+    nome_arquivo: str,
+    caminho_arquivo: str,
+    extensao: str,
+    categorias_disponiveis: Sequence[str],
+    host: str = HOST_PADRAO,
+    modelo: str = MODELO_PADRAO,
+    timeout: int = TIMEOUT_PADRAO,
+) -> str | None:
     """Pede a um modelo local (via Ollama) para escolher a melhor categoria.
 
     Retorna o nome de uma das `categorias_disponiveis` ou `None` se o
