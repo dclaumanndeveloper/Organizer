@@ -44,7 +44,16 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
+      - name: Instalar Xvfb e Tk (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb python3-tk
+
+      - name: Run tests (Linux, com display virtual)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a pytest -v
+
       - name: Run tests
+        if: runner.os != 'Linux'
         run: pytest -v
 
       - name: Build executable (Linux/Windows)
@@ -97,6 +106,11 @@ jobs:
           Description: Organizador de arquivos com interface grafica (Tkinter)
           EOF
           dpkg-deb --build --root-owner-group deb dist/organizador-linux.deb
+
+      - name: Instalar NSIS (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install nsis -y --no-progress
 
       - name: Gerar instalador NSIS (Windows)
         if: runner.os == 'Windows'
