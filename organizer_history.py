@@ -21,7 +21,7 @@ def carregar_historico(caminho=None):
     if not os.path.exists(caminho):
         return []
     try:
-        with open(caminho, "r", encoding="utf-8") as arquivo:
+        with open(caminho, encoding="utf-8") as arquivo:
             conteudo = json.load(arquivo)
     except (OSError, ValueError):
         return []

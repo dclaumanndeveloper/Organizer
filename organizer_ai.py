@@ -23,7 +23,7 @@ def _trecho_conteudo(caminho_arquivo, extensao):
     if extensao not in EXTENSOES_TEXTO:
         return ""
     try:
-        with open(caminho_arquivo, "r", encoding="utf-8", errors="ignore") as arquivo:
+        with open(caminho_arquivo, encoding="utf-8", errors="ignore") as arquivo:
             return arquivo.read(TAMANHO_TRECHO)
     except OSError:
         return ""
@@ -59,9 +59,9 @@ def classificar_arquivo(
     if trecho:
         prompt += f"Trecho do conteúdo: {trecho}\n"
 
-    corpo = json.dumps(
-        {"model": modelo, "prompt": prompt, "stream": False}
-    ).encode("utf-8")
+    corpo = json.dumps({"model": modelo, "prompt": prompt, "stream": False}).encode(
+        "utf-8"
+    )
     requisicao = urllib.request.Request(
         f"{host}/api/generate",
         data=corpo,

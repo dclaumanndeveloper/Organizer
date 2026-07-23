@@ -32,7 +32,7 @@ def carregar_mapa_categorias(caminho_config=None):
     categorias padrão embutidas (`CATEGORIAS_PADRAO`).
     """
     if caminho_config and os.path.exists(caminho_config):
-        with open(caminho_config, "r", encoding="utf-8") as arquivo:
+        with open(caminho_config, encoding="utf-8") as arquivo:
             categorias_por_grupo = json.load(arquivo)
     else:
         categorias_por_grupo = CATEGORIAS_PADRAO
@@ -50,7 +50,7 @@ def carregar_regras(caminho_config=None):
     """
     if not caminho_config or not os.path.exists(caminho_config):
         return []
-    with open(caminho_config, "r", encoding="utf-8") as arquivo:
+    with open(caminho_config, encoding="utf-8") as arquivo:
         bruto = json.load(arquivo)
     return [(re.compile(item["padrao"]), item["categoria"]) for item in bruto]
 
@@ -254,7 +254,9 @@ def organizar_arquivos(
             if eh_duplicado:
                 pasta_destino_nome = "duplicados"
             else:
-                categoria = _categoria_por_regra(nome_arquivo, regras) if regras else None
+                categoria = (
+                    _categoria_por_regra(nome_arquivo, regras) if regras else None
+                )
                 if (
                     categoria is None
                     and classificador_categoria is not None

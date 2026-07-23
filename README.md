@@ -140,6 +140,18 @@ Os testes de UI usam `pytest.importorskip("tkinter")` — se o `tkinter` não es
 
 Os testes também rodam automaticamente via GitHub Actions a cada `push`/`pull request`, em Linux, Windows e macOS (matrix de CI em `.github/workflows/test.yml`) — já que esta é uma aplicação desktop distribuída para as três plataformas. No job Linux, o CI instala `xvfb` e `python3-tk` e roda a suíte com `xvfb-run` (display virtual), garantindo que os testes de UI também rodem de verdade lá, não só sejam pulados.
 
+## Qualidade de Código (lint e formatação)
+
+O projeto usa [`ruff`](https://docs.astral.sh/ruff/) (lint) e [`black`](https://black.readthedocs.io/) (formatação), configurados em `pyproject.toml`. Um job `lint` separado no CI (`.github/workflows/test.yml`) roda os dois a cada `push`/`pull request`.
+
+Para rodar localmente antes de commitar:
+
+```bash
+pip install -r requirements-dev.txt
+ruff check .
+black --check .   # ou "black ." para formatar automaticamente
+```
+
 ## Licença
 
 Projeto sob licença GNU GPL v3 (veja o arquivo `LICENSE`).

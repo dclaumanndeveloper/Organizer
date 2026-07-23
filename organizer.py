@@ -18,9 +18,7 @@ PRIMARY_HOVER = "#3B4BC0"
 CAMINHO_CATEGORIAS = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "categorias.json"
 )
-CAMINHO_REGRAS = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "regras.json"
-)
+CAMINHO_REGRAS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "regras.json")
 
 INTERVALO_MONITORAMENTO_MS = 30_000
 
@@ -156,7 +154,9 @@ class OrganizadorApp:
             state="readonly",
             width=10,
         )
-        self.combo_idioma.set(IDIOMAS_DISPONIVEIS.get(self.idioma, IDIOMAS_DISPONIVEIS[IDIOMA_PADRAO]))
+        self.combo_idioma.set(
+            IDIOMAS_DISPONIVEIS.get(self.idioma, IDIOMAS_DISPONIVEIS[IDIOMA_PADRAO])
+        )
         self.combo_idioma.bind("<<ComboboxSelected>>", self._ao_trocar_idioma_combobox)
         self.combo_idioma.pack(anchor="e", pady=(2, 0))
 
@@ -268,7 +268,9 @@ class OrganizadorApp:
         self.botao_desfazer.pack(side="left", padx=(8, 0))
         self._atualizar_estado_botao_desfazer()
 
-        self.progress = ttk.Progressbar(container, orient="horizontal", mode="determinate")
+        self.progress = ttk.Progressbar(
+            container, orient="horizontal", mode="determinate"
+        )
         self.progress.pack(fill="x", pady=(0, 20))
 
         self.rotulo_resultado = ttk.Label(
@@ -290,9 +292,7 @@ class OrganizadorApp:
             padx=10,
             pady=10,
         )
-        scrollbar = ttk.Scrollbar(
-            resultado_frame, command=self.texto_resultado.yview
-        )
+        scrollbar = ttk.Scrollbar(resultado_frame, command=self.texto_resultado.yview)
         self.texto_resultado.configure(yscrollcommand=scrollbar.set)
         self.texto_resultado.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
@@ -317,7 +317,11 @@ class OrganizadorApp:
     def _ao_trocar_idioma_combobox(self, event=None):
         nome_selecionado = self.combo_idioma.get()
         codigo = next(
-            (cod for cod, nome in IDIOMAS_DISPONIVEIS.items() if nome == nome_selecionado),
+            (
+                cod
+                for cod, nome in IDIOMAS_DISPONIVEIS.items()
+                if nome == nome_selecionado
+            ),
             IDIOMA_PADRAO,
         )
         self._trocar_idioma(codigo)
@@ -394,9 +398,7 @@ class OrganizadorApp:
 
     def _atualizar_estado_botao_desfazer(self):
         tem_historico = bool(organizer_history.carregar_historico())
-        self.botao_desfazer.configure(
-            state="normal" if tem_historico else "disabled"
-        )
+        self.botao_desfazer.configure(state="normal" if tem_historico else "disabled")
 
     def _desfazer_ultima_organizacao(self):
         try:
@@ -525,9 +527,7 @@ class OrganizadorApp:
         self.progress.configure(value=0, maximum=1)
         self.window.update_idletasks()
 
-        verbo = (
-            self._t("verbo_seria_movido") if simular else self._t("verbo_movido")
-        )
+        verbo = self._t("verbo_seria_movido") if simular else self._t("verbo_movido")
 
         def registrar_progresso(indice, total, nome_arquivo, status, pasta_destino):
             self.progress.configure(maximum=total, value=indice)
@@ -613,9 +613,7 @@ class OrganizadorApp:
                 self._t("titulo_organizador"), self._t("info_simulacao")
             )
         else:
-            messagebox.showinfo(
-                self._t("titulo_organizador"), self._t("info_sucesso")
-            )
+            messagebox.showinfo(self._t("titulo_organizador"), self._t("info_sucesso"))
 
 
 def main():

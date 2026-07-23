@@ -116,7 +116,11 @@ _TEXTOS = {
         "en": "Cycle skipped: {mensagem}",
         "es": "Ciclo omitido: {mensagem}",
     },
-    "erro_generico": {"pt": "Erro: {erro}", "en": "Error: {erro}", "es": "Error: {erro}"},
+    "erro_generico": {
+        "pt": "Erro: {erro}",
+        "en": "Error: {erro}",
+        "es": "Error: {erro}",
+    },
     "status_movido": {
         "pt": "{verbo} para {pasta}/",
         "en": "{verbo} to {pasta}/",

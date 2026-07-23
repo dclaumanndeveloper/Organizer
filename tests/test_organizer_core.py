@@ -294,7 +294,9 @@ def test_carregar_regras_le_arquivo(tmp_path):
 
 def test_regra_por_nome_tem_prioridade_sobre_categoria_e_extensao(tmp_path):
     _criar_arquivo(tmp_path, "fatura_junho.pdf")
-    regras = carregar_regras_de_lista([{"padrao": "(?i)fatura", "categoria": "financeiro"}])
+    regras = carregar_regras_de_lista(
+        [{"padrao": "(?i)fatura", "categoria": "financeiro"}]
+    )
 
     stats = organizar_arquivos(
         str(tmp_path), mapa_categorias=carregar_mapa_categorias(), regras=regras
@@ -306,7 +308,9 @@ def test_regra_por_nome_tem_prioridade_sobre_categoria_e_extensao(tmp_path):
 
 def test_regra_por_nome_tem_prioridade_sobre_classificador_ia(tmp_path):
     _criar_arquivo(tmp_path, "fatura_junho.pdf")
-    regras = carregar_regras_de_lista([{"padrao": "(?i)fatura", "categoria": "financeiro"}])
+    regras = carregar_regras_de_lista(
+        [{"padrao": "(?i)fatura", "categoria": "financeiro"}]
+    )
 
     stats = organizar_arquivos(
         str(tmp_path),
@@ -320,7 +324,9 @@ def test_regra_por_nome_tem_prioridade_sobre_classificador_ia(tmp_path):
 
 def test_sem_match_de_regra_cai_para_categoria(tmp_path):
     _criar_arquivo(tmp_path, "ferias.pdf")
-    regras = carregar_regras_de_lista([{"padrao": "(?i)fatura", "categoria": "financeiro"}])
+    regras = carregar_regras_de_lista(
+        [{"padrao": "(?i)fatura", "categoria": "financeiro"}]
+    )
 
     stats = organizar_arquivos(
         str(tmp_path), mapa_categorias=carregar_mapa_categorias(), regras=regras
