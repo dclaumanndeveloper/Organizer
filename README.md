@@ -100,14 +100,16 @@ Isso dispara uma matrix de build (rodando os testes antes de empacotar, em cada 
 
 ## Como Rodar os Testes
 
-Os testes cobrem `organizer_core.py`, `organizer_config.py` e `organizer_ai.py` (este último com o Ollama mockado) e não abrem nenhuma janela gráfica, então funcionam em ambientes headless como CI:
+A suíte cobre `organizer_core.py`, `organizer_config.py`, `organizer_ai.py` (com o Ollama mockado) e também `organizer.py` (a UI Tkinter, em `tests/test_organizer_ui.py`), simulando cliques e verificando o estado da janela:
 
 ```bash
 pip install -r requirements-dev.txt
 pytest -v
 ```
 
-Os testes também rodam automaticamente via GitHub Actions a cada `push`/`pull request`, em Linux, Windows e macOS (matrix de CI em `.github/workflows/test.yml`) — já que esta é uma aplicação desktop distribuída para as três plataformas.
+Os testes de UI usam `pytest.importorskip("tkinter")` — se o `tkinter` não estiver instalado no ambiente, eles são pulados automaticamente em vez de falhar, então `pytest -v` funciona tanto em máquinas sem `tkinter` quanto em CI.
+
+Os testes também rodam automaticamente via GitHub Actions a cada `push`/`pull request`, em Linux, Windows e macOS (matrix de CI em `.github/workflows/test.yml`) — já que esta é uma aplicação desktop distribuída para as três plataformas. No job Linux, o CI instala `xvfb` e `python3-tk` e roda a suíte com `xvfb-run` (display virtual), garantindo que os testes de UI também rodem de verdade lá, não só sejam pulados.
 
 ## Licença
 
