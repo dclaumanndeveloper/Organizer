@@ -27,7 +27,7 @@ jobs:
           - os: windows-latest
             nome_saida: organizador-windows.exe
           - os: macos-latest
-            nome_saida: organizador-macos
+            nome_saida: organizador-macos.zip
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -47,11 +47,22 @@ jobs:
       - name: Run tests
         run: pytest -v
 
-      - name: Build executable
+      - name: Build executable (Linux/Windows)
+        if: runner.os != 'macOS'
         run: pyinstaller --onefile --windowed --name organizador organizer.py
 
-      - name: Renomear executável (Linux/macOS)
-        if: runner.os != 'Windows'
+      - name: Build .app bundle (macOS)
+        if: runner.os == 'macOS'
+        run: pyinstaller --windowed --name organizador organizer.py
+
+      - name: Empacotar .app em .zip (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            dist/organizador.app "dist/${{ matrix.nome_saida }}"
+
+      - name: Renomear executável (Linux)
+        if: runner.os == 'Linux'
         shell: bash
         run: mv "dist/organizador" "dist/${{ matrix.nome_saida }}"
 

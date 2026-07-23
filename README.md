@@ -104,18 +104,26 @@ pip install -r requirements-dev.txt
 pyinstaller --onefile --windowed --name organizador organizer.py
 ```
 
-O executável gerado fica em `dist/organizador` (ou `dist/organizador.exe` no Windows). As pastas `build/`, `dist/` e o arquivo `*.spec` gerados pelo PyInstaller já estão no `.gitignore` e não devem ser commitados.
+O executável gerado fica em `dist/organizador` (ou `dist/organizador.exe` no Windows). No macOS, use `pyinstaller --windowed --name organizador organizer.py` (sem `--onefile`) para gerar um bundle `.app` de verdade em `dist/organizador.app`, em vez de um binário solto. As pastas `build/`, `dist/` e o arquivo `*.spec` gerados pelo PyInstaller já estão no `.gitignore` e não devem ser commitados.
 
 ### Releases automatizados
 
-Em vez de gerar o executável manualmente, o workflow `.github/workflows/release.yml` builda e publica automaticamente os três executáveis (Linux, Windows e macOS) sempre que uma tag no formato `vX.Y.Z` é enviada ao repositório:
+Em vez de gerar o executável manualmente, o workflow `.github/workflows/release.yml` builda e publica automaticamente os artefatos das três plataformas sempre que uma tag no formato `vX.Y.Z` é enviada ao repositório (ou é disparado manualmente pela aba Actions, usando o input `versao_teste` como nome da tag):
 
 ```bash
 git tag v1.0.0
 git push origin v1.0.0
 ```
 
-Isso dispara uma matrix de build (rodando os testes antes de empacotar, em cada plataforma) e cria uma *release* em modo rascunho no GitHub com os três executáveis anexados (`organizador-linux`, `organizador-windows.exe`, `organizador-macos`), pronta para revisão e publicação manual.
+Isso dispara uma matrix de build (rodando os testes antes de empacotar, em cada plataforma) e cria uma *release* em modo rascunho no GitHub com os artefatos anexados:
+
+- `organizador-linux`: executável único (`--onefile`).
+- `organizador-windows.exe`: executável único (`--onefile`).
+- `organizador-macos.zip`: bundle `.app` de verdade (gerado sem `--onefile`, para que o Finder o reconheça como um aplicativo), compactado com `ditto` (preserva metadados do macOS melhor que `zip`).
+
+A release fica em rascunho, pronta para revisão e publicação manual.
+
+**Nota sobre assinatura de código**: nenhum dos artefatos é assinado digitalmente (não há certificado de desenvolvedor configurado). Isso significa que o Windows Defender SmartScreen e o Gatekeeper do macOS provavelmente vão avisar que o app é de "desenvolvedor desconhecido" no primeiro uso — no macOS, é necessário clicar com o botão direito no `.app` e escolher "Abrir" (em vez de dar duplo-clique) para contornar isso. Instaladores nativos completos (NSIS/Inno Setup no Windows, `.deb`/AppImage no Linux) e assinatura de código ainda não foram implementados — ficam como possíveis melhorias futuras.
 
 ## Como Rodar os Testes
 
