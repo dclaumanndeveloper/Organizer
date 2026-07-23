@@ -121,12 +121,16 @@ git push origin v1.0.0
 Isso dispara uma matrix de build (rodando os testes antes de empacotar, em cada plataforma) e cria uma *release* em modo rascunho no GitHub com os artefatos anexados:
 
 - `organizador-linux`: executável único (`--onefile`).
+- `organizador-linux.AppImage`: pacote portátil (basta dar permissão de execução e rodar, sem instalar nada).
+- `organizador-linux.deb`: pacote Debian/Ubuntu (`sudo dpkg -i organizador-linux.deb`) que instala o executável em `/usr/bin/organizador`.
 - `organizador-windows.exe`: executável único (`--onefile`).
+- `organizador-windows-installer.exe`: instalador NSIS que copia o programa para `Program Files`, cria um atalho no menu iniciar e um desinstalador.
 - `organizador-macos.zip`: bundle `.app` de verdade (gerado sem `--onefile`, para que o Finder o reconheça como um aplicativo), compactado com `ditto` (preserva metadados do macOS melhor que `zip`).
+- `organizador-macos.dmg`: imagem de disco (`.dmg`) contendo o mesmo bundle `.app`, no formato que usuários de Mac esperam para instalar aplicativos.
 
 A release fica em rascunho, pronta para revisão e publicação manual.
 
-**Nota sobre assinatura de código**: nenhum dos artefatos é assinado digitalmente (não há certificado de desenvolvedor configurado). Isso significa que o Windows Defender SmartScreen e o Gatekeeper do macOS provavelmente vão avisar que o app é de "desenvolvedor desconhecido" no primeiro uso — no macOS, é necessário clicar com o botão direito no `.app` e escolher "Abrir" (em vez de dar duplo-clique) para contornar isso. Instaladores nativos completos (NSIS/Inno Setup no Windows, `.deb`/AppImage no Linux) e assinatura de código ainda não foram implementados — ficam como possíveis melhorias futuras.
+**Nota sobre assinatura de código**: nenhum dos artefatos é assinado digitalmente (não há certificado de desenvolvedor configurado, nem para Windows Authenticode nem para notarização da Apple — ambos exigem uma conta paga que só o dono do projeto pode obter). Isso significa que o Windows Defender SmartScreen e o Gatekeeper do macOS provavelmente vão avisar que o app é de "desenvolvedor desconhecido" no primeiro uso — no macOS, é necessário clicar com o botão direito no `.app` (ou no `.dmg` montado) e escolher "Abrir" (em vez de dar duplo-clique) para contornar isso. O AppImage e o `.deb` também não são assinados (GPG), o que é comum para builds automatizados sem uma infraestrutura de assinatura própria.
 
 ## Empacotando para o PyPI
 
