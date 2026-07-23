@@ -233,6 +233,41 @@ _TEXTOS: dict[str, dict[str, str]] = {
         "es": "¡Última organización deshecha con éxito!",
     },
     "titulo_organizador": {"pt": "Organizador", "en": "Organizer", "es": "Organizador"},
+    "rotulo_perfil": {
+        "pt": "Perfil (configurações salvas)",
+        "en": "Profile (saved settings)",
+        "es": "Perfil (configuración guardada)",
+    },
+    "botao_salvar_perfil": {
+        "pt": "Salvar perfil",
+        "en": "Save profile",
+        "es": "Guardar perfil",
+    },
+    "botao_excluir_perfil": {
+        "pt": "Excluir perfil",
+        "en": "Delete profile",
+        "es": "Eliminar perfil",
+    },
+    "aviso_perfil_sem_nome": {
+        "pt": "Informe um nome para o perfil.",
+        "en": "Enter a name for the profile.",
+        "es": "Ingresa un nombre para el perfil.",
+    },
+    "info_perfil_salvo": {
+        "pt": 'Perfil "{nome}" salvo com sucesso.',
+        "en": 'Profile "{nome}" saved successfully.',
+        "es": 'Perfil "{nome}" guardado con éxito.',
+    },
+    "info_perfil_excluido": {
+        "pt": 'Perfil "{nome}" excluído.',
+        "en": 'Profile "{nome}" deleted.',
+        "es": 'Perfil "{nome}" eliminado.',
+    },
+    "aviso_perfil_nao_encontrado": {
+        "pt": 'Perfil "{nome}" não encontrado.',
+        "en": 'Profile "{nome}" not found.',
+        "es": 'Perfil "{nome}" no encontrado.',
+    },
 }
 
 
