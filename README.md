@@ -13,8 +13,9 @@ O código é dividido em módulos para separar a lógica de negócio da interfac
 -   **`organizer_core.py`**: contém a função `organizar_arquivos(...)`, responsável por toda a lógica de organização de arquivos (extensão, categorias, filtro por ano, simulação). Não depende de `tkinter` nem de rede, e é totalmente testável.
 -   **`organizer_ai.py`**: integração opcional com um servidor [Ollama](https://ollama.com) local, usada para sugerir a categoria de um arquivo a partir do nome (e de um trecho do conteúdo, para arquivos de texto). Não é importado por `organizer_core.py` — é passado a ele como uma função de callback (`classificador_categoria`), então o núcleo da aplicação não sabe nada sobre Ollama.
 -   **`organizer.py`**: monta a interface gráfica (Tkinter), lê as opções escolhidas pelo usuário e chama `organizer_core.organizar_arquivos`. É o ponto de entrada da aplicação.
+-   **`organizer_config.py`**: carrega/salva o último perfil de uso (pasta, ano, checkboxes) em `~/.organizador_arquivos/config.json`, para que a interface abra já preenchida com as últimas opções usadas.
 -   **`categorias.json`**: mapa de categorias (`{"categoria": ["ext1", "ext2", ...]}`) usado quando o agrupamento por categoria está ativado. Editável pelo usuário para customizar as categorias.
--   **`tests/`**: testes automatizados (`pytest`) cobrindo `organizer_core.py` e `organizer_ai.py` (este último com o Ollama mockado, sem precisar de um servidor real rodando).
+-   **`tests/`**: testes automatizados (`pytest`) cobrindo `organizer_core.py`, `organizer_config.py` e `organizer_ai.py` (este último com o Ollama mockado, sem precisar de um servidor real rodando).
 
 ## Bibliotecas Utilizadas
 
@@ -39,6 +40,8 @@ Para rodar os testes automatizados ou empacotar a aplicação como executável �
 7.  **Filtro por Ano (opcional)**: se um ano for informado no campo de entrada, arquivos cuja última modificação seja anterior a esse ano são ignorados (não são movidos, nem excluídos).
 8.  **Proteção contra sobrescrita**: se já existir um arquivo com o mesmo nome na pasta de destino, o arquivo movido é renomeado automaticamente (ex: `notas_1.txt`) em vez de sobrescrever o arquivo existente.
 9.  **Progresso em tempo real**: uma barra de progresso e um log mostram cada arquivo conforme é processado (`[2/5] foto.png - movido para imagens/`), além do resumo final.
+10. **Organização Recursiva** (opcional): ao marcar "Organizar subpastas também", cada subpasta encontrada também é organizada, ganhando suas próprias pastas de destino dentro dela mesma (os arquivos não são movidos para fora de onde estão, só agrupados no lugar). Pastas cujo nome já é uma categoria/extensão conhecida (ex: `imagens`, `sem_extensao`) não são percorridas novamente, para evitar reprocessar pastas de destino criadas em execuções anteriores.
+11. **Perfil Salvo**: a última pasta selecionada, o ano informado e todas as opções marcadas (simular, categorias, IA, recursivo) são lembrados entre uma execução e outra, em `~/.organizador_arquivos/config.json`.
 
 ## Como Executar o Script
 
@@ -86,14 +89,14 @@ O executável gerado fica em `dist/organizador` (ou `dist/organizador.exe` no Wi
 
 ## Como Rodar os Testes
 
-Os testes cobrem `organizer_core.py` e `organizer_ai.py` (este último com o Ollama mockado) e não abrem nenhuma janela gráfica, então funcionam em ambientes headless como CI:
+Os testes cobrem `organizer_core.py`, `organizer_config.py` e `organizer_ai.py` (este último com o Ollama mockado) e não abrem nenhuma janela gráfica, então funcionam em ambientes headless como CI:
 
 ```bash
 pip install -r requirements-dev.txt
 pytest -v
 ```
 
-Os testes também rodam automaticamente via GitHub Actions a cada `push`/`pull request` (veja `.github/workflows/test.yml`).
+Os testes também rodam automaticamente via GitHub Actions a cada `push`/`pull request`, em Linux, Windows e macOS (matrix de CI em `.github/workflows/test.yml`) — já que esta é uma aplicação desktop distribuída para as três plataformas.
 
 ## Licença
 
