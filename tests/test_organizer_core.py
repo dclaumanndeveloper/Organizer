@@ -90,3 +90,37 @@ def test_filtro_por_ano_move_arquivos_recentes(tmp_path):
 
     assert stats["movidos"] == 1
     assert stats["ignorados"] == 0
+
+
+def test_progresso_callback_e_chamado_para_cada_arquivo(tmp_path):
+    _criar_arquivo(tmp_path, "a.txt")
+    _criar_arquivo(tmp_path, "b.txt")
+    chamadas = []
+
+    stats = organizar_arquivos(
+        str(tmp_path),
+        progresso_callback=lambda indice, total, nome, status: chamadas.append(
+            (indice, total, nome, status)
+        ),
+    )
+
+    assert stats["movidos"] == 2
+    assert len(chamadas) == 2
+    assert {c[1] for c in chamadas} == {2}
+    assert {c[3] for c in chamadas} == {"movido"}
+    assert {c[0] for c in chamadas} == {1, 2}
+
+
+def test_progresso_callback_reporta_ignorado(tmp_path):
+    caminho = _criar_arquivo(tmp_path, "antigo.txt")
+    timestamp_antigo = time.mktime((2015, 1, 1, 0, 0, 0, 0, 0, 0))
+    os.utime(caminho, (timestamp_antigo, timestamp_antigo))
+    chamadas = []
+
+    organizar_arquivos(
+        str(tmp_path),
+        ano_minimo=2020,
+        progresso_callback=lambda indice, total, nome, status: chamadas.append(status),
+    )
+
+    assert chamadas == ["ignorado"]

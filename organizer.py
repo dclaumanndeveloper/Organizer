@@ -132,7 +132,10 @@ class OrganizadorApp:
             style="Primary.TButton",
             command=self._selecionar_e_organizar,
         )
-        self.botao_organizar.pack(anchor="w", pady=(0, 20))
+        self.botao_organizar.pack(anchor="w", pady=(0, 12))
+
+        self.progress = ttk.Progressbar(container, orient="horizontal", mode="determinate")
+        self.progress.pack(fill="x", pady=(0, 20))
 
         ttk.Label(container, text="Resultado", style="FieldLabel.TLabel").pack(
             anchor="w"
@@ -159,12 +162,19 @@ class OrganizadorApp:
         self.texto_resultado.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
-        self._escrever_resultado("Os resultados da organização aparecerão aqui.")
+        self._limpar_resultado("Os resultados da organização aparecerão aqui.")
 
-    def _escrever_resultado(self, texto):
+    def _limpar_resultado(self, texto=""):
         self.texto_resultado.configure(state="normal")
         self.texto_resultado.delete("1.0", "end")
-        self.texto_resultado.insert("1.0", texto)
+        if texto:
+            self.texto_resultado.insert("1.0", texto)
+        self.texto_resultado.configure(state="disabled")
+
+    def _adicionar_linha_resultado(self, linha):
+        self.texto_resultado.configure(state="normal")
+        self.texto_resultado.insert("end", linha + "\n")
+        self.texto_resultado.see("end")
         self.texto_resultado.configure(state="disabled")
 
     def _selecionar_e_organizar(self):
@@ -188,9 +198,21 @@ class OrganizadorApp:
                 return
 
         self.botao_organizar.configure(state="disabled", text="Organizando...")
+        self.progress.configure(value=0, maximum=1)
+        self._limpar_resultado()
         self.window.update_idletasks()
+
+        def registrar_progresso(indice, total, nome_arquivo, status):
+            self.progress.configure(maximum=total, value=indice)
+            self._adicionar_linha_resultado(
+                f"[{indice}/{total}] {nome_arquivo} - {status}"
+            )
+            self.window.update_idletasks()
+
         try:
-            stats = organizar_arquivos(diretorio, ano_minimo)
+            stats = organizar_arquivos(
+                diretorio, ano_minimo, progresso_callback=registrar_progresso
+            )
         except NotADirectoryError as exc:
             messagebox.showerror("Organizador", str(exc))
             return
@@ -202,7 +224,12 @@ class OrganizadorApp:
         self._mostrar_resultado(stats)
 
     def _mostrar_resultado(self, stats):
-        linhas = [f"{stats['movidos']} arquivo(s) organizado(s) com sucesso."]
+        if stats["movidos"] == stats["ignorados"] == len(stats["erros"]) == 0:
+            self._adicionar_linha_resultado("Nenhum arquivo encontrado na pasta.")
+            messagebox.showinfo("Organizador", "Nenhum arquivo encontrado na pasta.")
+            return
+
+        linhas = ["", f"{stats['movidos']} arquivo(s) organizado(s) com sucesso."]
         if stats["ignorados"]:
             linhas.append(
                 f"{stats['ignorados']} arquivo(s) ignorado(s) pelo filtro de ano."
@@ -211,7 +238,8 @@ class OrganizadorApp:
             linhas.append(f"{len(stats['erros'])} erro(s):")
             linhas.extend(f"  - {erro}" for erro in stats["erros"])
 
-        self._escrever_resultado("\n".join(linhas))
+        for linha in linhas:
+            self._adicionar_linha_resultado(linha)
 
         if stats["erros"]:
             messagebox.showwarning(
