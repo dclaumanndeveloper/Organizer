@@ -1,50 +1,92 @@
 # Organizador de Arquivos com Interface Gráfica (Python/Tkinter)
 
-Este projeto consiste em um script Python que implementa um organizador de arquivos simples com uma interface gráfica (GUI) construída usando a biblioteca `tkinter`. O objetivo é ajudar a organizar arquivos dentro de um diretório selecionado, movendo-os automaticamente para subpastas baseadas na extensão de cada arquivo.
+Este projeto consiste em um script Python que implementa um organizador de arquivos com uma interface gráfica (GUI) construída usando a biblioteca `tkinter`. O objetivo é ajudar a organizar arquivos dentro de um diretório selecionado, movendo-os automaticamente para subpastas por extensão, por categoria, ou por sugestão de uma IA local (Ollama).
 
 ## Descrição
 
-O script permite que o usuário selecione um diretório através de uma caixa de diálogo gráfica e, opcionalmente, informe um ano mínimo de modificação. A organização é feita criando dinamicamente subpastas com o nome da extensão de cada arquivo e movendo os arquivos correspondentes para essas pastas, resultando em um diretório mais limpo e organizado, agrupado por tipo.
+O script permite que o usuário selecione um diretório através de uma caixa de diálogo gráfica e, opcionalmente, informe um ano mínimo de modificação. A organização é feita criando dinamicamente subpastas e movendo os arquivos correspondentes para elas, resultando em um diretório mais limpo e organizado. Um modo de simulação permite ver o que aconteceria antes de mover qualquer arquivo de verdade.
 
 ## Estrutura do Projeto
 
-O código é dividido em dois módulos para separar a lógica de negócio da interface gráfica (o que permite testar a lógica sem precisar abrir uma janela):
+O código é dividido em módulos para separar a lógica de negócio da interface gráfica (o que permite testar a lógica sem precisar abrir uma janela) e para manter a integração opcional com IA isolada do restante:
 
--   **`organizer_core.py`**: contém a função `organizar_arquivos(diretorio, ano_minimo=None)`, responsável por toda a lógica de organização de arquivos. Não depende de `tkinter` e é totalmente testável.
--   **`organizer.py`**: monta a interface gráfica (Tkinter) e chama `organizer_core.organizar_arquivos` quando o usuário clica em "Selecionar". É o ponto de entrada da aplicação.
--   **`tests/test_organizer_core.py`**: testes automatizados (`pytest`) cobrindo a lógica de organização.
+-   **`organizer_core.py`**: contém a função `organizar_arquivos(...)`, responsável por toda a lógica de organização de arquivos (extensão, categorias, filtro por ano, simulação). Não depende de `tkinter` nem de rede, e é totalmente testável.
+-   **`organizer_ai.py`**: integração opcional com um servidor [Ollama](https://ollama.com) local, usada para sugerir a categoria de um arquivo a partir do nome (e de um trecho do conteúdo, para arquivos de texto). Não é importado por `organizer_core.py` — é passado a ele como uma função de callback (`classificador_categoria`), então o núcleo da aplicação não sabe nada sobre Ollama.
+-   **`organizer.py`**: monta a interface gráfica (Tkinter), lê as opções escolhidas pelo usuário e chama `organizer_core.organizar_arquivos`. É o ponto de entrada da aplicação.
+-   **`categorias.json`**: mapa de categorias (`{"categoria": ["ext1", "ext2", ...]}`) usado quando o agrupamento por categoria está ativado. Editável pelo usuário para customizar as categorias.
+-   **`tests/`**: testes automatizados (`pytest`) cobrindo `organizer_core.py` e `organizer_ai.py` (este último com o Ollama mockado, sem precisar de um servidor real rodando).
 
 ## Bibliotecas Utilizadas
 
-Todas as bibliotecas usadas fazem parte da biblioteca padrão do Python — não há dependências externas para rodar o organizador:
+Rodar o organizador não requer nenhuma dependência externa — tudo usa a biblioteca padrão do Python:
 
--   **`os`**: interação com o sistema de arquivos (`os.listdir`, `os.path.isfile`, `os.makedirs`, `os.path.join`, `os.replace`, etc.).
--   **`datetime`**: usado para obter o ano da última modificação de um arquivo, quando o filtro por ano é utilizado.
--   **`tkinter`**: biblioteca padrão para GUIs. Fornece `Tk`, `Canvas`, `Entry`, `Button`, `filedialog` e `messagebox`, usados na interface.
+-   **`os`**: interação com o sistema de arquivos.
+-   **`datetime`**: obter o ano da última modificação de um arquivo (filtro por ano).
+-   **`json`**: carregar o mapa de categorias (`categorias.json`).
+-   **`urllib.request`**: fazer as chamadas HTTP ao servidor Ollama local (sem precisar de bibliotecas como `requests`).
+-   **`tkinter`**: biblioteca padrão para GUIs.
 
-Para rodar os testes automatizados é necessário o `pytest` (veja `requirements-dev.txt`).
+Para rodar os testes automatizados ou empacotar a aplicação como executável é necessário instalar as dependências de desenvolvimento (veja `requirements-dev.txt`).
 
 ## Funcionalidades
 
 1.  **Seleção de Diretório**: um botão abre uma caixa de diálogo nativa do sistema operacional para escolher a pasta a ser organizada.
-2.  **Organização por Extensão**: cada arquivo é movido para uma subpasta nomeada com sua extensão (em minúsculas). Arquivos sem extensão (ou arquivos ocultos como `.env`) vão para uma pasta `sem_extensao`.
-3.  **Criação Dinâmica de Pastas**: as subpastas de destino são criadas automaticamente conforme necessário.
-4.  **Filtro por Ano (opcional)**: se um ano for informado no campo de entrada, arquivos cuja última modificação seja anterior a esse ano são ignorados (não são movidos, nem excluídos). Deixar o campo em branco organiza todos os arquivos, sem filtro.
-5.  **Proteção contra sobrescrita**: se já existir um arquivo com o mesmo nome na pasta de destino, o arquivo movido é renomeado automaticamente (ex: `notas_1.txt`) em vez de sobrescrever o arquivo existente.
-6.  **Feedback ao Usuário**: ao final, uma caixa de mensagem informa quantos arquivos foram organizados, quantos foram ignorados pelo filtro de ano e eventuais erros ocorridos (ex: permissão negada).
+2.  **Organização por Extensão** (padrão): cada arquivo é movido para uma subpasta nomeada com sua extensão (em minúsculas). Arquivos sem extensão (ou ocultos, como `.env`) vão para uma pasta `sem_extensao`.
+3.  **Organização por Categoria** (opcional): ao marcar "Agrupar por categoria", arquivos são agrupados em pastas temáticas (`imagens`, `documentos`, `planilhas`, `apresentacoes`, `audio`, `video`, `compactados`, ...) definidas em `categorias.json`, em vez de uma pasta por extensão.
+4.  **Classificação por IA local (Ollama)** (opcional): ao marcar "Usar IA local (Ollama)", cada arquivo é enviado (nome + um trecho do conteúdo, para arquivos de texto) a um modelo rodando localmente via [Ollama](https://ollama.com), que sugere a categoria mais adequada dentre as definidas em `categorias.json`. Se o Ollama não estiver disponível em `localhost:11434`, ou a resposta do modelo não for reconhecida, a aplicação avisa o usuário e cai automaticamente de volta para a classificação por categoria/extensão — a IA nunca é obrigatória nem bloqueia o uso do programa.
+5.  **Modo de Simulação** (opcional): ao marcar "Simular", a aplicação mostra exatamente o que aconteceria (quais arquivos seriam movidos e para onde) sem mover nenhum arquivo nem criar nenhuma pasta. Útil para revisar antes de organizar de verdade.
+6.  **Criação Dinâmica de Pastas**: as subpastas de destino são criadas automaticamente conforme necessário (exceto em modo de simulação).
+7.  **Filtro por Ano (opcional)**: se um ano for informado no campo de entrada, arquivos cuja última modificação seja anterior a esse ano são ignorados (não são movidos, nem excluídos).
+8.  **Proteção contra sobrescrita**: se já existir um arquivo com o mesmo nome na pasta de destino, o arquivo movido é renomeado automaticamente (ex: `notas_1.txt`) em vez de sobrescrever o arquivo existente.
+9.  **Progresso em tempo real**: uma barra de progresso e um log mostram cada arquivo conforme é processado (`[2/5] foto.png - movido para imagens/`), além do resumo final.
 
 ## Como Executar o Script
 
-1.  **Requisitos**: tenha o Python 3 instalado. As bibliotecas `os`, `datetime` e `tkinter` já vêm com o Python (em algumas distribuições Linux, `tkinter` precisa ser instalado separadamente via gerenciador de pacotes do sistema, ex: `sudo apt install python3-tk`).
+1.  **Requisitos**: tenha o Python 3 instalado. `tkinter` já vem com o Python na maioria das instalações (em algumas distribuições Linux precisa ser instalado separadamente, ex: `sudo apt install python3-tk`).
 2.  **Executar pelo Terminal**: navegue até o diretório do projeto e rode:
     ```bash
     python3 organizer.py
     ```
 3.  **Executar em uma IDE**: abra `organizer.py` e utilize a função de "Executar" da IDE.
 
+### Usando a classificação por IA (opcional)
+
+A classificação por IA é totalmente opcional e roda localmente — nenhum arquivo é enviado para a nuvem:
+
+1.  Instale o [Ollama](https://ollama.com/download) e baixe um modelo (ex: `ollama pull llama3.2`).
+2.  Certifique-se de que o servidor está rodando (`ollama serve`, geralmente já roda como serviço após a instalação) e acessível em `http://localhost:11434`.
+3.  Na interface do organizador, marque "Usar IA local (Ollama) para sugerir a categoria de cada arquivo".
+
+Se o Ollama não estiver rodando, o organizador simplesmente avisa e usa a classificação por categoria/extensão normalmente.
+
+## Personalizando as Categorias
+
+Edite o arquivo `categorias.json` para adicionar, remover ou renomear categorias:
+
+```json
+{
+  "imagens": ["jpg", "jpeg", "png", "gif"],
+  "documentos": ["pdf", "doc", "docx"],
+  "financeiro": ["ofx", "xlsx"]
+}
+```
+
+Essas categorias são usadas tanto pelo agrupamento manual quanto como opções que a IA pode escolher.
+
+## Empacotando como Executável (PyInstaller)
+
+Para distribuir o organizador sem exigir que o usuário final tenha Python instalado:
+
+```bash
+pip install -r requirements-dev.txt
+pyinstaller --onefile --windowed --name organizador organizer.py
+```
+
+O executável gerado fica em `dist/organizador` (ou `dist/organizador.exe` no Windows). As pastas `build/`, `dist/` e o arquivo `*.spec` gerados pelo PyInstaller já estão no `.gitignore` e não devem ser commitados.
+
 ## Como Rodar os Testes
 
-Os testes cobrem a lógica de `organizer_core.py` (não abrem nenhuma janela gráfica, então funcionam em ambientes headless como CI):
+Os testes cobrem `organizer_core.py` e `organizer_ai.py` (este último com o Ollama mockado) e não abrem nenhuma janela gráfica, então funcionam em ambientes headless como CI:
 
 ```bash
 pip install -r requirements-dev.txt

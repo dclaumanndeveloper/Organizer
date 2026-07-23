@@ -1,7 +1,9 @@
+import os
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
-from organizer_core import organizar_arquivos
+import organizer_ai
+from organizer_core import carregar_mapa_categorias, organizar_arquivos
 
 BG_COLOR = "#FAFBFF"
 CARD_COLOR = "#FFFFFF"
@@ -10,13 +12,21 @@ MUTED_COLOR = "#6B6B6B"
 PRIMARY_COLOR = "#4C5FD5"
 PRIMARY_HOVER = "#3B4BC0"
 
+CAMINHO_CATEGORIAS = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "categorias.json"
+)
+
 
 class OrganizadorApp:
     LARGURA = 560
-    ALTURA = 520
+    ALTURA = 560
 
     def __init__(self, window):
         self.window = window
+        self.var_simular = tk.BooleanVar(value=False)
+        self.var_categorias = tk.BooleanVar(value=False)
+        self.var_ia = tk.BooleanVar(value=False)
+
         self._configurar_janela()
         self._configurar_estilos()
         self._construir_layout()
@@ -24,7 +34,7 @@ class OrganizadorApp:
     def _configurar_janela(self):
         self.window.title("Organizador de Arquivos")
         self.window.configure(bg=BG_COLOR)
-        self.window.minsize(480, 460)
+        self.window.minsize(480, 500)
         self._centralizar_janela()
 
     def _centralizar_janela(self):
@@ -73,6 +83,7 @@ class OrganizadorApp:
             font=("Segoe UI", 9),
             padding=8,
         )
+        style.configure("Check.TCheckbutton", background=BG_COLOR, font=("Segoe UI", 9))
         style.configure(
             "Primary.TButton",
             background=PRIMARY_COLOR,
@@ -124,7 +135,28 @@ class OrganizadorApp:
             "Deixe em branco para organizar tudo.",
             style="Muted.TLabel",
             wraplength=500,
-        ).pack(anchor="w", pady=(0, 20))
+        ).pack(anchor="w", pady=(0, 12))
+
+        opcoes_frame = ttk.Frame(container, style="App.TFrame")
+        opcoes_frame.pack(fill="x", pady=(0, 16))
+        ttk.Checkbutton(
+            opcoes_frame,
+            text="Simular (não mover arquivos, só mostrar o que aconteceria)",
+            variable=self.var_simular,
+            style="Check.TCheckbutton",
+        ).pack(anchor="w")
+        ttk.Checkbutton(
+            opcoes_frame,
+            text="Agrupar por categoria (Imagens, Documentos, ...) em vez de extensão",
+            variable=self.var_categorias,
+            style="Check.TCheckbutton",
+        ).pack(anchor="w")
+        ttk.Checkbutton(
+            opcoes_frame,
+            text="Usar IA local (Ollama) para sugerir a categoria de cada arquivo",
+            variable=self.var_ia,
+            style="Check.TCheckbutton",
+        ).pack(anchor="w")
 
         self.botao_organizar = ttk.Button(
             container,
@@ -177,6 +209,33 @@ class OrganizadorApp:
         self.texto_resultado.see("end")
         self.texto_resultado.configure(state="disabled")
 
+    def _preparar_categorias_e_classificador(self):
+        mapa_categorias = None
+        if self.var_categorias.get() or self.var_ia.get():
+            mapa_categorias = carregar_mapa_categorias(CAMINHO_CATEGORIAS)
+
+        classificador = None
+        if self.var_ia.get():
+            if not organizer_ai.ollama_disponivel():
+                messagebox.showwarning(
+                    "Organizador",
+                    "Ollama não está disponível em localhost:11434. "
+                    "Continuando sem classificação por IA (usando "
+                    "extensão/categoria padrão).",
+                )
+            else:
+                categorias_disponiveis = sorted(set(mapa_categorias.values()))
+
+                def classificador(nome_arquivo, caminho_arquivo, extensao):
+                    return organizer_ai.classificar_arquivo(
+                        nome_arquivo,
+                        caminho_arquivo,
+                        extensao,
+                        categorias_disponiveis,
+                    )
+
+        return mapa_categorias, classificador
+
     def _selecionar_e_organizar(self):
         diretorio = filedialog.askdirectory()
         if not diretorio:
@@ -197,21 +256,36 @@ class OrganizadorApp:
                 )
                 return
 
+        mapa_categorias, classificador = self._preparar_categorias_e_classificador()
+        simular = self.var_simular.get()
+
         self.botao_organizar.configure(state="disabled", text="Organizando...")
         self.progress.configure(value=0, maximum=1)
         self._limpar_resultado()
         self.window.update_idletasks()
 
-        def registrar_progresso(indice, total, nome_arquivo, status):
+        verbo = "seria movido" if simular else "movido"
+
+        def registrar_progresso(indice, total, nome_arquivo, status, pasta_destino):
             self.progress.configure(maximum=total, value=indice)
+            descricao = {
+                "movido": f"{verbo} para {pasta_destino}/",
+                "ignorado": "ignorado (filtro de ano)",
+                "erro": "erro ao processar",
+            }[status]
             self._adicionar_linha_resultado(
-                f"[{indice}/{total}] {nome_arquivo} - {status}"
+                f"[{indice}/{total}] {nome_arquivo} - {descricao}"
             )
             self.window.update_idletasks()
 
         try:
             stats = organizar_arquivos(
-                diretorio, ano_minimo, progresso_callback=registrar_progresso
+                diretorio,
+                ano_minimo,
+                mapa_categorias=mapa_categorias,
+                classificador_categoria=classificador,
+                simular=simular,
+                progresso_callback=registrar_progresso,
             )
         except NotADirectoryError as exc:
             messagebox.showerror("Organizador", str(exc))
@@ -221,15 +295,16 @@ class OrganizadorApp:
                 state="normal", text="Selecionar pasta e organizar"
             )
 
-        self._mostrar_resultado(stats)
+        self._mostrar_resultado(stats, simular)
 
-    def _mostrar_resultado(self, stats):
+    def _mostrar_resultado(self, stats, simular):
         if stats["movidos"] == stats["ignorados"] == len(stats["erros"]) == 0:
             self._adicionar_linha_resultado("Nenhum arquivo encontrado na pasta.")
             messagebox.showinfo("Organizador", "Nenhum arquivo encontrado na pasta.")
             return
 
-        linhas = ["", f"{stats['movidos']} arquivo(s) organizado(s) com sucesso."]
+        verbo = "seria(m) organizado(s)" if simular else "organizado(s) com sucesso"
+        linhas = ["", f"{stats['movidos']} arquivo(s) {verbo}."]
         if stats["ignorados"]:
             linhas.append(
                 f"{stats['ignorados']} arquivo(s) ignorado(s) pelo filtro de ano."
@@ -245,6 +320,12 @@ class OrganizadorApp:
             messagebox.showwarning(
                 "Organizador",
                 "Organização concluída com erros. Veja os detalhes na janela.",
+            )
+        elif simular:
+            messagebox.showinfo(
+                "Organizador",
+                "Simulação concluída. Desmarque \"Simular\" e organize "
+                "novamente para mover os arquivos de verdade.",
             )
         else:
             messagebox.showinfo("Organizador", "Arquivos organizados com sucesso!")
